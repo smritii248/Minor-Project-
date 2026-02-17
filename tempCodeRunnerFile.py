@@ -1,55 +1,73 @@
 from flask import Flask, request, jsonify, render_template
-import requests
-import markdown2
-from PIL import Image
-import pytesseract
-import io
+import os
+import pickle
+import faiss
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
 
-# FastAPI backend URL (keep same)
-FASTAPI_URL = 'http://127.0.0.1:8000'
+# ----------------------------
+# LOAD EVERYTHING ONCE
+# ----------------------------
 
-@app.route('/', methods=['GET'])
-def index():
-    return render_template('index.html')
+print("Loading embedding model...")
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-@app.route('/simplify', methods=['POST'])
-def simplify():
+print("Loading FAISS index...")
+index = faiss.read_index("faiss_index.index")
+
+print("Loading stored texts...")
+with open("documents.pkl", "rb") as f:
+    documents = pickle.load(f)
+
+print("Backend loaded successfully ✅")
+
+
+# ----------------------------
+# HOME ROUTE
+# ----------------------------
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+# ----------------------------
+# RETRIEVAL FUNCTION
+# ----------------------------
+def retrieve_answer(query, top_k=3):
+    query_embedding = model.encode([query])
+
+    distances, indices = index.search(query_embedding, top_k)
+
+    results = []
+    for i in indices[0]:
+        if i < len(documents):
+            results.append(documents[i])
+
+    return results
+
+
+# ----------------------------
+# API ROUTE
+# ----------------------------
+@app.route("/ask", methods=["POST"])
+def ask():
     data = request.get_json()
-    medical_text = data.get('medical_text')
-    if not medical_text:
-        return jsonify({'error': 'No text provided'}), 400
+    user_query = data.get("question")
 
-    try:
-        # Forward to your FastAPI endpoint (adjust endpoint name if needed)
-        response = requests.post(f"{FASTAPI_URL}/simplify_text", json={'input': medical_text})
-        response.raise_for_status()
-        result = response.json()
+    if not user_query:
+        return jsonify({"error": "No question provided"}), 400
 
-        # Optional: render markdown if your FastAPI returns raw text
-        if 'simplified_explanation' in result:
-            result['simplified_explanation'] = markdown2.markdown(result['simplified_explanation'])
+    retrieved_docs = retrieve_answer(user_query)
 
-        return jsonify(result)
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Backend error: {str(e)}'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({
+        "question": user_query,
+        "retrieved_results": retrieved_docs
+    })
 
-# Optional: Keep OCR upload if you want (can add separate route/button later)
-@app.route('/upload-image', methods=['POST'])
-def upload_image():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file'}), 400
-    file = request.files['file']
-    try:
-        img = Image.open(file)
-        text = pytesseract.image_to_string(img)
-        # Then call simplify internally or return text for frontend to send
-        return jsonify({'extracted_text': text})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5000)
+# ----------------------------
+# RUN SERVER
+# ----------------------------
+if __name__ == "__main__":
+    app.run(debug=True)
