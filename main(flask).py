@@ -37,24 +37,45 @@ print("Backend ready ✅")
 def index():
     return render_template('index.html')
 
-
 @app.route('/simplify', methods=['POST'])
 def simplify():
-    data = request.get_json()
-    medical_text = data.get("medical_text")
-
-    if not medical_text:
-        return jsonify({"error": "No text provided"}), 400
-
     try:
+        data = request.get_json()
+        user_text = data.get("text", "")
+
+        if not user_text:
+            return jsonify({"error": "No text provided"}), 400
+
         # Retrieve relevant documents
-        docs = retriever.get_relevant_documents(medical_text)
+        docs = vectorstore.similarity_search(user_text, k=3)
 
         if not docs:
             return jsonify({
-                "simplified_explanation": "No relevant medical information found.",
-                "confidence_score": 0.0
+                "simplified_text": "No relevant medical information found.",
+                "sources": []
             })
+
+        # Combine retrieved content
+        combined_text = " ".join([doc.page_content for doc in docs])
+
+        # Simple fallback simplification (for MID demo)
+        simplified = f"In simple terms: {combined_text[:300]}..."
+
+        # Extract sources
+        sources = []
+        for doc in docs:
+            if "source" in doc.metadata:
+                sources.append(doc.metadata["source"])
+
+        return jsonify({
+            "simplified_text": simplified,
+            "sources": list(set(sources))
+        })
+
+    except Exception as e:
+        print("ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
+
 
         # Combine retrieved content
         combined_text = "\n\n".join([doc.page_content for doc in docs])
@@ -88,3 +109,4 @@ In simple words, it explains the condition and its meaning based on trusted medi
 # ==============================
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5001)
+
