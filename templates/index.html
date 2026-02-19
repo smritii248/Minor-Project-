@@ -1,166 +1,504 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Medical Jargon Simplification System</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <title>MedClear — Medical Jargon Simplifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f2ec;
+      --surface:   #ffffff;
+      --ink:       #1a1612;
+      --muted:     #7a7068;
+      --accent:    #c4432b;
+      --accent2:   #2b6ca8;
+      --border:    #e0dbd2;
+      --radius:    14px;
+      --shadow:    0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 2rem 3rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo-mark {
+      width: 42px; height: 42px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-mark svg { width: 22px; height: 22px; fill: white; }
+    header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.6rem;
+      letter-spacing: -0.02em;
+    }
+    header h1 span { color: var(--accent); }
+    .tagline {
+      margin-left: auto;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* ── Hero text ── */
+    .hero {
+      text-align: center;
+      animation: fadeUp 0.6s ease both;
+    }
+    .hero h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.6rem;
+    }
+    .hero h2 em { font-style: italic; color: var(--accent); }
+    .hero p { color: var(--muted); font-size: 1rem; line-height: 1.6; }
+
+    /* ── Input card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.8rem;
+      box-shadow: var(--shadow);
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.97rem;
+      line-height: 1.6;
+      color: var(--ink);
+      background: var(--bg);
+      resize: vertical;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--accent2); }
+    textarea::placeholder { color: #aaa8a2; }
+
+    /* Examples */
+    .examples {
+      margin-top: 0.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .examples span {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-right: 0.2rem;
+    }
+    .example-chip {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg);
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--ink);
+    }
+    .example-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #fdf3f1;
+    }
+
+    .btn {
+      margin-top: 1.2rem;
+      width: 100%;
+      padding: 0.9rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .btn:hover { background: #a83523; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+    /* spinner */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* ── Result section ── */
+    #results { display: none; animation: fadeUp 0.5s ease both; }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .result-header h3 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.2rem;
+    }
+
+    /* Confidence badge */
+    .confidence {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .conf-bar-wrap {
+      width: 80px; height: 7px;
+      background: var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .conf-bar {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.8s cubic-bezier(.23,1,.32,1);
+      background: var(--accent2);
+    }
+
+    /* Best match box */
+    .best-match {
+      background: #eef5fc;
+      border-left: 3.5px solid var(--accent2);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 1.4rem;
+    }
+    .best-match .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 0.5rem;
+    }
+    .best-match p {
+      font-size: 0.97rem;
+      line-height: 1.7;
+      color: var(--ink);
+    }
+
+    /* Related matches */
+    .matches-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.8rem;
+    }
+
+    .match-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+      transition: box-shadow 0.2s;
+    }
+    .match-item:hover { box-shadow: var(--shadow); }
+
+    .match-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .match-col {
+      padding: 0.9rem 1.1rem;
+    }
+    .match-col:first-child {
+      border-right: 1px solid var(--border);
+      background: #faf9f7;
+    }
+    .match-col .col-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .match-col:first-child .col-label { color: var(--accent); }
+    .match-col:last-child .col-label { color: var(--accent2); }
+    .match-col p { font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
+
+    /* Error state */
+    .error-box {
+      background: #fff3f1;
+      border: 1px solid #f5c3bc;
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      color: var(--accent);
+      font-size: 0.92rem;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 1.5rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      border-top: 1px solid var(--border);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 1.2rem; }
+      .tagline { display: none; }
+      .match-row { grid-template-columns: 1fr; }
+      .match-col:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
 </head>
-<body class="bg-gray-50 font-sans antialiased">
+<body>
 
-  <!-- Header -->
-  <header class="bg-blue-600 text-white shadow">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-      <div class="flex items-center space-x-3">
-        <i class="fas fa-stethoscope text-3xl"></i>
-        <h1 class="text-2xl font-bold">Medical Jargon Simplification System</h1>
-      </div>
-      <nav class="space-x-6">
-        <a href="#" class="hover:underline">About</a>
-        <a href="#" class="hover:underline">Help</a>
-      </nav>
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-7 3a1 1 0 0 1 1 1v3h3a1 1 0 0 1 0 2h-3v3a1 1 0 0 1-2 0v-3H8a1 1 0 0 1 0-2h3V7a1 1 0 0 1 1-1z"/>
+    </svg>
+  </div>
+  <h1>Med<span>Clear</span></h1>
+  <span class="tagline">Medical Jargon Simplifier</span>
+</header>
+
+<main>
+  <div class="hero">
+    <h2>Decode <em>complex</em> medical language</h2>
+    <p>Paste any medical text and get a clear, plain-language explanation powered by a database of 15,000+ expert-verified simplifications.</p>
+  </div>
+
+  <div class="card">
+    <label for="medInput">Medical Text</label>
+    <textarea
+      id="medInput"
+      placeholder="e.g. There is 1+ pretibial edema. Patient presents with dyspnea on exertion and bilateral rales…"
+    ></textarea>
+
+    <div class="examples">
+      <span>Try:</span>
+      <button class="example-chip" onclick="fillExample('There is 1+ pretibial edema.')">Pretibial edema</button>
+      <button class="example-chip" onclick="fillExample('PREOPERATIVE DIAGNOSIS: Adenocarcinoma of the prostate.')">Adenocarcinoma</button>
+      <button class="example-chip" onclick="fillExample('Sickle cell anemia (SCA) is a disease characterized by abnormal polymerization of HbS.')">Sickle cell</button>
+      <button class="example-chip" onclick="fillExample('The patient presents with dyspnea on exertion and bilateral rales on auscultation.')">Dyspnea</button>
     </div>
-  </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-8">
-    <div class="grid md:grid-cols-2 gap-8">
+    <button class="btn" id="simplifyBtn" onclick="simplify()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+      Simplify Text
+    </button>
+  </div>
 
-      <!-- Left: Input -->
-      <div>
-        <h2 class="text-2xl font-semibold mb-4">Enter Medical Text</h2>
-        <textarea id="medicalText" rows="6" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Paste medical text here...&#10;Example: The patient has hypertension and requires antihypertensive medication."></textarea>
-        <button id="simplifyBtn" class="mt-4 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50">
-          Simplify & Explain
-        </button>
-      </div>
-
-      <!-- Right: Results (hidden until loaded) -->
-      <div id="resultsSection" class="hidden space-y-8">
-
-        <!-- Simplified Explanation -->
-        <div class="bg-white p-6 rounded-lg shadow">
-          <h3 class="text-xl font-semibold mb-3">Simplified Explanation</h3>
-          <div id="simplifiedText" class="prose max-w-none text-gray-800"></div>
-        </div>
-
-        <!-- Term Details Table -->
-        <div class="bg-white p-6 rounded-lg shadow">
-          <h3 class="text-xl font-semibold mb-4">Explanation Details</h3>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Original Term</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Simplified Term</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Explanation</th>
-                </tr>
-              </thead>
-              <tbody id="termsTable" class="bg-white divide-y divide-gray-200"></tbody>
-            </table>
+  <!-- Results -->
+  <div id="results">
+    <div class="card">
+      <div class="result-header">
+        <h3>Simplified Explanation</h3>
+        <div class="confidence" id="confBadge">
+          <span id="confLabel">—</span>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar" id="confBar" style="width:0%"></div>
           </div>
-        </div>
-
-        <!-- Sources & Confidence (side by side on md+) -->
-        <div class="grid md:grid-cols-2 gap-6">
-          <div class="bg-white p-6 rounded-lg shadow">
-            <h3 class="text-xl font-semibold mb-4">Verified Medical Sources</h3>
-            <ul id="sourcesList" class="space-y-2 text-gray-700"></ul>
-          </div>
-
-          <div class="bg-white p-6 rounded-lg shadow">
-            <h3 class="text-xl font-semibold mb-4">Confidence Level</h3>
-            <div class="mt-2">
-              <div class="w-full bg-gray-200 rounded-full h-4">
-                <div id="confidenceBar" class="bg-green-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
-              </div>
-              <p id="confidenceText" class="mt-3 text-center font-medium text-lg"></p>
-              <p class="text-sm text-gray-500 mt-1 text-center">Based on source agreement and human validation</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Validation footer -->
-        <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-center text-green-800">
-          <p class="font-medium">✓ Validated by lay users and medical experts</p>
-          <p class="text-sm mt-1">✓ Accuracy & readability feedback incorporated</p>
         </div>
       </div>
 
-      <!-- Loading spinner -->
-      <div id="loading" class="hidden col-span-2 text-center py-12">
-        <div class="animate-spin inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
-        <p class="mt-4 text-gray-600">Simplifying medical text...</p>
+      <div class="best-match" id="bestMatch">
+        <div class="label">Best Match</div>
+        <p id="bestMatchText"></p>
       </div>
+
+      <div class="matches-title" id="moreTitle"></div>
+      <div id="matchesList"></div>
     </div>
-  </main>
+  </div>
+</main>
 
-  <script>
+<footer>MedClear — Medical Jargon Simplification System &nbsp;|&nbsp; Powered by FAISS + HuggingFace Embeddings</footer>
+
+<script>
+  function fillExample(text) {
+    document.getElementById('medInput').value = text;
+    document.getElementById('medInput').focus();
+  }
+
+  async function simplify() {
+    const input = document.getElementById('medInput').value.trim();
+    if (!input) {
+      document.getElementById('medInput').focus();
+      return;
+    }
+
     const btn = document.getElementById('simplifyBtn');
-    const textArea = document.getElementById('medicalText');
-    const results = document.getElementById('resultsSection');
-    const loading = document.getElementById('loading');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> Searching…';
 
-    btn.addEventListener('click', async () => {
-      const input = textArea.value.trim();
-      if (!input) {
-        alert('Please enter some medical text');
+    document.getElementById('results').style.display = 'none';
+
+    try {
+      const res = await fetch('/simplify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ medical_text: input })
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        showError(data.error);
         return;
       }
 
-      results.classList.add('hidden');
-      loading.classList.remove('hidden');
-      btn.disabled = true;
+      renderResults(data);
 
-      try {
-        const res = await fetch('/simplify', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({medical_text: input})
-        });
+    } catch (err) {
+      showError('Could not connect to server. Is Flask running on port 5001?');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+        Simplify Text`;
+    }
+  }
 
-        if (!res.ok) throw new Error('Failed to simplify');
+  function renderResults(data) {
+    const resultsEl = document.getElementById('results');
+    const matches = data.matches || [];
 
-        const data = await res.json();
+    // Confidence
+    const score = data.confidence_score || 0;
+    document.getElementById('confLabel').textContent =
+      score >= 0.9 ? 'High confidence' : score >= 0.6 ? 'Medium confidence' : 'Low confidence';
+    setTimeout(() => {
+      document.getElementById('confBar').style.width = (score * 100) + '%';
+      document.getElementById('confBar').style.background =
+        score >= 0.9 ? '#2b6ca8' : score >= 0.6 ? '#e8892a' : '#c4432b';
+    }, 50);
 
-        // Fill simplified text
-        document.getElementById('simplifiedText').innerHTML = data.simplified_explanation || 'No explanation available';
+    // Best match
+    document.getElementById('bestMatchText').textContent = data.simplified_explanation;
 
-        // Fill terms table
-        const tbody = document.getElementById('termsTable');
-        tbody.innerHTML = '';
-        (data.terms || []).forEach(term => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap">${term.original}</td>
-            <td class="px-6 py-4 whitespace-nowrap">${term.simplified}</td>
-            <td class="px-6 py-4">${term.explanation}</td>
-          `;
-          tbody.appendChild(row);
-        });
+    // More matches
+    const listEl = document.getElementById('matchesList');
+    const moreTitle = document.getElementById('moreTitle');
+    listEl.innerHTML = '';
 
-        // Sources
-        const sourcesUl = document.getElementById('sourcesList');
-        sourcesUl.innerHTML = '';
-        (data.sources || []).forEach(src => {
-          const li = document.createElement('li');
-          li.innerHTML = `<span class="text-green-600 mr-2">✓</span> ${src}`;
-          sourcesUl.appendChild(li);
-        });
+    const extraMatches = matches.slice(1);
+    if (extraMatches.length > 0) {
+      moreTitle.textContent = `Related matches (${extraMatches.length})`;
+      extraMatches.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'match-item';
+        item.innerHTML = `
+          <div class="match-row">
+            <div class="match-col">
+              <div class="col-label">Medical</div>
+              <p>${escHtml(m.medical)}</p>
+            </div>
+            <div class="match-col">
+              <div class="col-label">Simplified</div>
+              <p>${escHtml(m.simple)}</p>
+            </div>
+          </div>`;
+        listEl.appendChild(item);
+      });
+    } else {
+      moreTitle.textContent = '';
+    }
 
-        // Confidence
-        const conf = data.confidence || 0;
-        document.getElementById('confidenceBar').style.width = `${conf}%`;
-        document.getElementById('confidenceText').textContent = `${conf}% - ${data.confidence_label || 'Unknown'}`;
+    resultsEl.style.display = 'block';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
-        results.classList.remove('hidden');
-      } catch (err) {
-        alert('Error: ' + err.message);
-      } finally {
-        loading.classList.add('hidden');
-        btn.disabled = false;
-      }
-    });
-  </script>
+  function showError(msg) {
+    const resultsEl = document.getElementById('results');
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = `<div class="error-box">⚠️ ${escHtml(msg)}</div>`;
+    resultsEl.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Allow Ctrl+Enter to submit
+  document.getElementById('medInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) simplify();
+  });
+</script>
 </body>
 </html>

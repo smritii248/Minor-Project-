@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-import os
 
 app = Flask(__name__)
 
@@ -17,13 +16,11 @@ embedding_model = HuggingFaceEmbeddings(
 # LOAD FAISS VECTOR DATABASE
 # ==============================
 print("Loading FAISS index...")
-
 vectorstore = FAISS.load_local(
-    "faiss_index",  # folder created from notebook
+    "faiss_index",
     embedding_model,
     allow_dangerous_deserialization=True
 )
-
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 print("Backend ready ✅")
@@ -39,6 +36,7 @@ def index():
 
 @app.route('/simplify', methods=['POST'])
 def simplify():
+<<<<<<< HEAD:main(flask).py
     try:
         data = request.get_json()
         user_text = data.get("text", "")
@@ -79,25 +77,41 @@ def simplify():
 
         # Combine retrieved content
         combined_text = "\n\n".join([doc.page_content for doc in docs])
+=======
+    data = request.get_json()
+    medical_text = data.get("medical_text", "").strip()
 
-        # Simple explanation logic (for defense demo)
-        simplified = f"""
-🔎 Extracted Medical Context:
+    if not medical_text:
+        return jsonify({"error": "No text provided"}), 400
 
-{combined_text[:800]}
+    try:
+        docs = retriever.invoke(medical_text)
 
-📘 Simplified Explanation:
+        if not docs:
+            return jsonify({
+                "simplified_explanation": "No relevant medical information found in the database.",
+                "confidence_score": 0.0,
+                "matches": []
+            })
 
-This medical text refers to the above condition. It describes the concept in medical terminology. 
-In simple words, it explains the condition and its meaning based on trusted medical sources.
-"""
+        # Build matches — each doc has the medical text + its real simple translation
+        matches = []
+        for doc in docs:
+            matches.append({
+                "medical": doc.page_content,
+                # 'simple' key was stored as metadata when building the FAISS index
+                "simple": doc.metadata.get("simple", "No simplified version available.")
+            })
+>>>>>>> f0589c8 (Add flask app, frontend, faiss builder and updated notebook):main_flask.py
 
-        # Retrieval confidence (based on number of docs found)
+        # Confidence score based on how many docs were retrieved
         confidence_score = round(len(docs) / 3, 2)
 
         return jsonify({
-            "simplified_explanation": simplified,
-            "confidence_score": confidence_score
+            # Best match simple text is the primary explanation shown to user
+            "simplified_explanation": matches[0]["simple"],
+            "confidence_score": confidence_score,
+            "matches": matches   # all 3 matches sent to frontend
         })
 
     except Exception as e:
