@@ -148,11 +148,20 @@
           sourcesUl.appendChild(li);
         });
 
-        // Confidence
-        const conf = data.confidence || 0;
-        document.getElementById('confidenceBar').style.width = `${conf}%`;
-        document.getElementById('confidenceText').textContent = `${conf}% - ${data.confidence_label || 'Unknown'}`;
+        // Confidence – show pending message when not calculated
+const confidenceLabel = data.confidence_label || 'Unknown';
+const confidenceTextElem = document.getElementById('confidenceText');
+const confidenceBar = document.getElementById('confidenceBar');
 
+if (confidenceLabel.includes('pending') || data.confidence === null || data.confidence === undefined) {
+    confidenceBar.style.width = '0%';  // hide bar
+    confidenceTextElem.textContent = confidenceLabel;
+    confidenceTextElem.style.color = '#6b7280';  // gray for pending look (optional)
+} else {
+    const conf = data.confidence || 0;
+    confidenceBar.style.width = `${conf}%`;
+    confidenceTextElem.textContent = `${conf}% - ${confidenceLabel}`;
+}
         results.classList.remove('hidden');
       } catch (err) {
         alert('Error: ' + err.message);
