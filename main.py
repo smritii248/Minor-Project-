@@ -2,17 +2,142 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-import os
 import re
 import sqlite3
 import pandas as pd
 import traceback
 
-# Optional — uncomment if you want readability feature
-# from textstat import flesch_reading_ease, flesch_kincaid_grade
-
 app = Flask(__name__)
 CORS(app)
+
+# ==============================
+# READABILITY FUNCTIONS (Pure Python)
+# ==============================
+
+def count_syllables(word):
+    word = word.lower().strip(".,!?;:")
+    if len(word) <= 3:
+        return 1
+    vowels = "aeiouy"
+    count = 0
+    prev_vowel = False
+    for char in word:
+        is_vowel = char in vowels
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    if word.endswith("e"):
+        count -= 1
+    return max(1, count)
+
+def flesch_reading_ease(text):
+    """Flesch Reading Ease: 100 = Very Easy, 0 = Very Difficult"""
+    if not text or not text.strip():
+        return 0
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    num_sentences = max(len(sentences), 1)
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    num_words = max(len(words), 1)
+    num_syllables = sum(count_syllables(w) for w in words)
+    score = 206.835 - 1.015 * (num_words / num_sentences) - 84.6 * (num_syllables / num_words)
+    return round(max(0, min(100, score)), 1)
+
+def flesch_kincaid_grade(text):
+    """Flesch-Kincaid Grade Level"""
+    if not text or not text.strip():
+        return 0
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    num_sentences = max(len(sentences), 1)
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    num_words = max(len(words), 1)
+    num_syllables = sum(count_syllables(w) for w in words)
+    grade = 0.39 * (num_words / num_sentences) + 11.8 * (num_syllables / num_words) - 15.59
+    return round(max(0, grade), 1)
+
+def avg_sentence_length(text):
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    if not sentences:
+        return 0
+    return round(len(words) / len(sentences), 1)
+
+def avg_word_length(text):
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    if not words:
+        return 0
+    return round(sum(len(w) for w in words) / len(words), 1)
+
+def count_complex_words(text):
+    """Words with 3+ syllables are considered complex"""
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    return sum(1 for w in words if count_syllables(w) >= 3)
+
+def get_readability_label(score):
+    if score >= 90:   return "Very Easy"
+    elif score >= 70: return "Easy"
+    elif score >= 60: return "Standard"
+    elif score >= 50: return "Fairly Difficult"
+    elif score >= 30: return "Difficult"
+    else:             return "Very Difficult"
+
+def get_grade_level(score):
+    if score >= 90:   return "5th grade (Child level)"
+    elif score >= 70: return "6th-7th grade (Easy)"
+    elif score >= 60: return "8th-9th grade (Standard)"
+    elif score >= 50: return "10th-12th grade (Fairly Hard)"
+    elif score >= 30: return "College level (Difficult)"
+    else:             return "Professional / Expert level"
+
+def get_audience(score):
+    if score >= 90:   return "Children / General Public"
+    elif score >= 70: return "General Public"
+    elif score >= 60: return "High School Students"
+    elif score >= 50: return "College Students"
+    elif score >= 30: return "Medical Professionals"
+    else:             return "Domain Experts / Specialists"
+
+def get_suggestions(orig_score, simp_score, avg_sent, avg_word, complex_count):
+    tips = []
+    if avg_sent > 20:
+        tips.append("Break long sentences into shorter ones (aim for under 20 words per sentence).")
+    if avg_word > 6:
+        tips.append("Replace long words with simpler everyday alternatives.")
+    if complex_count > 3:
+        tips.append(f"Found {complex_count} complex words (3+ syllables) — consider simplifying them.")
+    if orig_score < 50:
+        tips.append("Original text is highly technical — good candidate for simplification.")
+    if simp_score and simp_score > orig_score:
+        tips.append("Simplification improved readability — the text is now easier to understand.")
+    if not tips:
+        tips.append("Text readability is within acceptable range.")
+    return tips
+
+def full_readability_assessment(text):
+    score        = flesch_reading_ease(text)
+    fk_grade     = flesch_kincaid_grade(text)
+    label        = get_readability_label(score)
+    grade        = get_grade_level(score)
+    audience     = get_audience(score)
+    avg_sent     = avg_sentence_length(text)
+    avg_word     = avg_word_length(text)
+    complex_cnt  = count_complex_words(text)
+    words        = re.findall(r'\b[a-zA-Z]+\b', text)
+    sentences    = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
+    return {
+        "score":           score,
+        "label":           label,
+        "grade_level":     grade,
+        "fk_grade":        fk_grade,
+        "audience":        audience,
+        "word_count":      len(words),
+        "sentence_count":  len(sentences),
+        "avg_sentence_len": avg_sent,
+        "avg_word_len":    avg_word,
+        "complex_words":   complex_cnt,
+    }
 
 # ==============================
 # LOAD EMBEDDING MODEL
@@ -58,12 +183,10 @@ except Exception as e:
     print(f"Error loading medical terms from DB: {str(e)}")
     print("→ Using fallback terms for demo")
 
-# Always have some fallback
 if not medical_terms:
     print("WARNING: No terms loaded — using fallback")
     medical_terms = {"hypertension", "diabetes", "acromegaly", "paracetamol poisoning"}
 
-# Improved term extraction with word boundaries
 def extract_medical_terms(text):
     text_lower = text.lower()
     found = []
@@ -100,17 +223,32 @@ def simplify():
         if not user_text:
             return jsonify({"error": "No text provided"}), 400
 
+        # Full readability assessment on original
+        orig_assessment = full_readability_assessment(user_text)
+
         # Extract terms
         potential_terms = extract_medical_terms(user_text)
         print("Extracted terms:", potential_terms)
 
         if not potential_terms:
+            suggestions = get_suggestions(
+                orig_assessment["score"], None,
+                orig_assessment["avg_sentence_len"],
+                orig_assessment["avg_word_len"],
+                orig_assessment["complex_words"]
+            )
             return jsonify({
                 "simplified_explanation": "No medical terms detected in the input.",
                 "terms": [],
                 "sources": [],
                 "confidence": None,
-                "confidence_label": "Not available yet – human validation pending"
+                "confidence_label": "Not available yet – human validation pending",
+                "readability": {
+                    "original": orig_assessment,
+                    "simplified": None,
+                    "improvement": None,
+                    "suggestions": suggestions
+                }
             })
 
         # Retrieve documents
@@ -122,23 +260,19 @@ def simplify():
             if vectorstore is None:
                 print(" → FAISS not loaded, skipping retrieval")
                 continue
-
             try:
                 docs_with_scores = vectorstore.similarity_search_with_score(term, k=1)
-                print(f" → Found {len(docs_with_scores)} document(s)")
-
                 if docs_with_scores:
                     doc, score = docs_with_scores[0]
                     print(f" → Score: {score:.3f}")
-
-                    if score < 0.8:  # adjust threshold if needed
+                    if score < 0.8:
                         if 'term' in doc.metadata:
-                            original = doc.metadata['term']
+                            original  = doc.metadata['term']
                             simplified = doc.metadata.get('summary', original.lower())
                             explanation = doc.page_content.strip() or "Medical term simplified for clarity"
                             terms_list.append({
-                                "original": original,
-                                "simplified": simplified,
+                                "original":    original,
+                                "simplified":  simplified,
                                 "explanation": explanation
                             })
                         if "source" in doc.metadata:
@@ -146,14 +280,25 @@ def simplify():
             except Exception as retrieval_err:
                 print(f"Retrieval error for '{term}': {str(retrieval_err)}")
 
-        # If no valid terms found after retrieval
         if not terms_list:
+            suggestions = get_suggestions(
+                orig_assessment["score"], None,
+                orig_assessment["avg_sentence_len"],
+                orig_assessment["avg_word_len"],
+                orig_assessment["complex_words"]
+            )
             return jsonify({
                 "simplified_explanation": "Found terms but no relevant explanations in the knowledge base.",
                 "terms": [],
                 "sources": ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"],
                 "confidence": None,
-                "confidence_label": "Not available yet – human validation pending"
+                "confidence_label": "Not available yet – human validation pending",
+                "readability": {
+                    "original": orig_assessment,
+                    "simplified": None,
+                    "improvement": None,
+                    "suggestions": suggestions
+                }
             })
 
         # Build simplified explanation
@@ -168,18 +313,43 @@ def simplify():
         if not simplified_explanation.endswith('.'):
             simplified_explanation += '.'
 
+        # Full readability assessment on simplified
+        simp_assessment = full_readability_assessment(simplified_explanation)
+        improvement     = round(simp_assessment["score"] - orig_assessment["score"], 1)
+
+        suggestions = get_suggestions(
+            orig_assessment["score"],
+            simp_assessment["score"],
+            orig_assessment["avg_sentence_len"],
+            orig_assessment["avg_word_len"],
+            orig_assessment["complex_words"]
+        )
+
         sources = list(sources_set) if sources_set else ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"]
 
-        # Optional: Add readability here if you want it back
-        # readability_info = ... (see previous messages)
+        # Confidence
+        s_retrieval = len(terms_list) / max(len(potential_terms), 1)
+        s_source    = len(sources) / 3
+        confidence  = int((0.5 * s_retrieval + 0.3 * s_source + 0.2 * 0.0) * 100)
+        if confidence >= 80:
+            confidence_label = "High Confidence"
+        elif confidence >= 50:
+            confidence_label = "Medium Confidence"
+        else:
+            confidence_label = "Low Confidence"
 
         return jsonify({
             "simplified_explanation": simplified_explanation,
-            "terms": terms_list,
-            "sources": sources,
-            "confidence": None,
-            "confidence_label": "Not available yet – human validation pending"
-            # "readability": readability_info   # ← uncomment if you add it
+            "terms":            terms_list,
+            "sources":          sources,
+            "confidence":       confidence,
+            "confidence_label": confidence_label,
+            "readability": {
+                "original":    orig_assessment,
+                "simplified":  simp_assessment,
+                "improvement": improvement,
+                "suggestions": suggestions
+            }
         })
 
     except Exception as e:
@@ -193,5 +363,4 @@ def simplify():
 if __name__ == '__main__':
     print("\nStarting server...")
     print("→ Open http://localhost:5500 in browser")
-    print("→ Or use Live Server on index.html and test POST to /simplify")
     app.run(debug=True, host="0.0.0.0", port=5500)
