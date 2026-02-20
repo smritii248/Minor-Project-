@@ -31,7 +31,6 @@ def count_syllables(word):
     return max(1, count)
 
 def flesch_reading_ease(text):
-    """Flesch Reading Ease: 100 = Very Easy, 0 = Very Difficult"""
     if not text or not text.strip():
         return 0
     sentences = re.split(r'[.!?]+', text)
@@ -44,7 +43,6 @@ def flesch_reading_ease(text):
     return round(max(0, min(100, score)), 1)
 
 def flesch_kincaid_grade(text):
-    """Flesch-Kincaid Grade Level"""
     if not text or not text.strip():
         return 0
     sentences = re.split(r'[.!?]+', text)
@@ -71,7 +69,6 @@ def avg_word_length(text):
     return round(sum(len(w) for w in words) / len(words), 1)
 
 def count_complex_words(text):
-    """Words with 3+ syllables are considered complex"""
     words = re.findall(r'\b[a-zA-Z]+\b', text)
     return sum(1 for w in words if count_syllables(w) >= 3)
 
@@ -82,22 +79,6 @@ def get_readability_label(score):
     elif score >= 50: return "Fairly Difficult"
     elif score >= 30: return "Difficult"
     else:             return "Very Difficult"
-
-def get_grade_level(score):
-    if score >= 90:   return "5th grade (Child level)"
-    elif score >= 70: return "6th-7th grade (Easy)"
-    elif score >= 60: return "8th-9th grade (Standard)"
-    elif score >= 50: return "10th-12th grade (Fairly Hard)"
-    elif score >= 30: return "College level (Difficult)"
-    else:             return "Professional / Expert level"
-
-def get_audience(score):
-    if score >= 90:   return "Children / General Public"
-    elif score >= 70: return "General Public"
-    elif score >= 60: return "High School Students"
-    elif score >= 50: return "College Students"
-    elif score >= 30: return "Medical Professionals"
-    else:             return "Domain Experts / Specialists"
 
 def get_suggestions(orig_score, simp_score, avg_sent, avg_word, complex_count):
     tips = []
@@ -116,27 +97,23 @@ def get_suggestions(orig_score, simp_score, avg_sent, avg_word, complex_count):
     return tips
 
 def full_readability_assessment(text):
-    score        = flesch_reading_ease(text)
-    fk_grade     = flesch_kincaid_grade(text)
-    label        = get_readability_label(score)
-    grade        = get_grade_level(score)
-    audience     = get_audience(score)
-    avg_sent     = avg_sentence_length(text)
-    avg_word     = avg_word_length(text)
-    complex_cnt  = count_complex_words(text)
-    words        = re.findall(r'\b[a-zA-Z]+\b', text)
-    sentences    = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
+    score       = flesch_reading_ease(text)
+    fk_grade    = flesch_kincaid_grade(text)
+    label       = get_readability_label(score)
+    avg_sent    = avg_sentence_length(text)
+    avg_word    = avg_word_length(text)
+    complex_cnt = count_complex_words(text)
+    words       = re.findall(r'\b[a-zA-Z]+\b', text)
+    sentences   = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
     return {
-        "score":           score,
-        "label":           label,
-        "grade_level":     grade,
-        "fk_grade":        fk_grade,
-        "audience":        audience,
-        "word_count":      len(words),
-        "sentence_count":  len(sentences),
+        "score":            score,
+        "label":            label,
+        "fk_grade":         fk_grade,
+        "word_count":       len(words),
+        "sentence_count":   len(sentences),
         "avg_sentence_len": avg_sent,
-        "avg_word_len":    avg_word,
-        "complex_words":   complex_cnt,
+        "avg_word_len":     avg_word,
+        "complex_words":    complex_cnt,
     }
 
 # ==============================
@@ -206,12 +183,15 @@ def index():
 @app.route('/health')
 def health():
     return jsonify({
-        "status": "ok",
+        "status":       "ok",
         "faiss_loaded": vectorstore is not None,
         "terms_loaded": len(medical_terms),
-        "embedding_model": embedding_model is not None
+        "embedding_ok": embedding_model is not None,
     })
 
+# ==============================
+# /simplify ROUTE
+# ==============================
 @app.route('/simplify', methods=['POST'])
 def simplify():
     print("\n=== NEW SIMPLIFY REQUEST ===")
@@ -223,10 +203,7 @@ def simplify():
         if not user_text:
             return jsonify({"error": "No text provided"}), 400
 
-        # Full readability assessment on original
         orig_assessment = full_readability_assessment(user_text)
-
-        # Extract terms
         potential_terms = extract_medical_terms(user_text)
         print("Extracted terms:", potential_terms)
 
@@ -239,20 +216,15 @@ def simplify():
             )
             return jsonify({
                 "simplified_explanation": "No medical terms detected in the input.",
-                "terms": [],
-                "sources": [],
-                "confidence": None,
+                "terms": [], "sources": [], "confidence": None,
                 "confidence_label": "Not available yet, human validation pending",
                 "readability": {
-                    "original": orig_assessment,
-                    "simplified": None,
-                    "improvement": None,
-                    "suggestions": suggestions
+                    "original": orig_assessment, "simplified": None,
+                    "improvement": None, "suggestions": suggestions
                 }
             })
 
-        # Retrieve documents
-        terms_list = []
+        terms_list  = []
         sources_set = set()
 
         for term in potential_terms:
@@ -267,8 +239,8 @@ def simplify():
                     print(f" → Score: {score:.3f}")
                     if score < 0.8:
                         if 'term' in doc.metadata:
-                            original  = doc.metadata['term']
-                            simplified = doc.metadata.get('summary', original.lower())
+                            original    = doc.metadata['term']
+                            simplified  = doc.metadata.get('summary', original.lower())
                             explanation = doc.page_content.strip() or "Medical term simplified for clarity"
                             terms_list.append({
                                 "original":    original,
@@ -289,45 +261,32 @@ def simplify():
             )
             return jsonify({
                 "simplified_explanation": "Found terms but no relevant explanations in the knowledge base.",
-                "terms": [],
-                "sources": ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"],
-                "confidence": None,
-                "confidence_label": "Not available yet – human validation pending",
+                "terms": [], "sources": ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"],
+                "confidence": None, "confidence_label": "Not available yet – human validation pending",
                 "readability": {
-                    "original": orig_assessment,
-                    "simplified": None,
-                    "improvement": None,
-                    "suggestions": suggestions
+                    "original": orig_assessment, "simplified": None,
+                    "improvement": None, "suggestions": suggestions
                 }
             })
 
-        # Build simplified explanation
         simplified_explanation = user_text
         for t in terms_list:
             simplified_explanation = re.sub(
                 r'\b' + re.escape(t['original']) + r'\b',
-                t['simplified'],
-                simplified_explanation,
-                flags=re.IGNORECASE
+                t['simplified'], simplified_explanation, flags=re.IGNORECASE
             )
         if not simplified_explanation.endswith('.'):
             simplified_explanation += '.'
 
-        # Full readability assessment on simplified
         simp_assessment = full_readability_assessment(simplified_explanation)
         improvement     = round(simp_assessment["score"] - orig_assessment["score"], 1)
-
-        suggestions = get_suggestions(
-            orig_assessment["score"],
-            simp_assessment["score"],
+        suggestions     = get_suggestions(
+            orig_assessment["score"], simp_assessment["score"],
             orig_assessment["avg_sentence_len"],
             orig_assessment["avg_word_len"],
             orig_assessment["complex_words"]
         )
-
         sources = list(sources_set) if sources_set else ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"]
-
-        
 
         return jsonify({
             "simplified_explanation": simplified_explanation,
