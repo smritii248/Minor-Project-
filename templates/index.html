@@ -6,21 +6,9 @@
   <title>Medical Jargon Simplification System</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-
-  <!-- Custom CSS to force hide results until shown -->
-  <style>
-    #resultsSection {
-      display: none !important;
-      opacity: 0;
-      transition: opacity 0.5s ease-in-out;
-    }
-    #resultsSection.show {
-      display: block !important;
-      opacity: 1;
-    }
-  </style>
 </head>
 <body class="bg-gray-50 font-sans antialiased">
+
   <!-- Header -->
   <header class="bg-blue-600 text-white shadow">
     <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
@@ -35,106 +23,178 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-8">
-    <div class="grid md:grid-cols-2 gap-8">
-      <!-- Left: Input -->
-      <div>
-        <h2 class="text-2xl font-semibold mb-4">Enter Medical Text</h2>
-        <textarea id="medicalText" rows="6" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Paste medical text here...\nExample: The patient has hypertension and requires antihypertensive medication."></textarea>
-        <button id="simplifyBtn" class="mt-4 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50">
-          Simplify & Explain
-        </button>
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+
+    <!-- Input -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-2xl font-semibold mb-4">Enter Medical Text</h2>
+      <textarea id="medicalText" rows="5"
+        class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        placeholder="Paste medical text here...&#10;Example: The patient has hypertension and requires antihypertensive medication."></textarea>
+      <button id="simplifyBtn"
+        class="mt-4 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50">
+        <i class="fas fa-magic mr-2"></i>Simplify &amp; Explain
+      </button>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden text-center py-10">
+      <div class="animate-spin inline-block w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+      <p class="mt-3 text-gray-500">Simplifying medical text...</p>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsSection" class="hidden space-y-6">
+
+      <!-- 1. Simplified Explanation -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-semibold mb-2 text-gray-800">
+          <i class="fas fa-check-circle text-green-500 mr-2"></i>Simplified Explanation
+        </h3>
+        <p id="simplifiedText" class="text-gray-700 leading-relaxed"></p>
       </div>
 
-      <!-- Right: Results (completely hidden until loaded) -->
-      <div id="resultsSection" class="space-y-8">
-        <!-- Simplified Explanation -->
-        <div class="bg-white p-6 rounded-lg shadow">
-          <h3 class="text-xl font-semibold mb-3">Simplified Explanation</h3>
-          <div id="simplifiedText" class="prose max-w-none text-gray-800"></div>
-        </div>
+      <!-- 2. Readability Metrics -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-semibold mb-4 text-gray-800">
+          <i class="fas fa-chart-bar text-blue-500 mr-2"></i>Readability Metrics
+        </h3>
 
-        <!-- Term Details Table -->
-        <div class="bg-white p-6 rounded-lg shadow">
-          <h3 class="text-xl font-semibold mb-4">Explanation Details</h3>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Original Term</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Simplified Term</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Explanation</th>
-                </tr>
-              </thead>
-              <tbody id="termsTable" class="bg-white divide-y divide-gray-200"></tbody>
-            </table>
+        <!-- Score row -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <!-- Original -->
+          <div class="border border-red-200 bg-red-50 rounded-lg p-4 text-center">
+            <p class="text-xs text-red-500 font-semibold uppercase mb-1">Original Text</p>
+            <p class="text-4xl font-bold text-red-600" id="origScore">—</p>
+            <p class="text-sm text-gray-600 mt-1" id="origLabel">—</p>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <div id="origBar" class="bg-red-400 h-2 rounded-full transition-all duration-700" style="width:0%"></div>
+            </div>
           </div>
-        </div>
-
-        <!-- Sources & Confidence (side by side on md+) -->
-        <div class="grid md:grid-cols-2 gap-6">
-          <div class="bg-white p-6 rounded-lg shadow">
-            <h3 class="text-xl font-semibold mb-4">Verified Medical Sources</h3>
-            <ul id="sourcesList" class="space-y-2 text-gray-700"></ul>
-          </div>
-          <div class="bg-white p-6 rounded-lg shadow">
-            <h3 class="text-xl font-semibold mb-4">Confidence Level</h3>
-            <div class="mt-2">
-              <div class="w-full bg-gray-200 rounded-full h-4">
-                <div id="confidenceBar" class="bg-green-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
-              </div>
-              <p id="confidenceText" class="mt-3 text-center font-medium text-lg"></p>
-              <p class="text-sm text-gray-500 mt-1 text-center">Based on source agreement and human validation</p>
+          <!-- Simplified -->
+          <div class="border border-green-200 bg-green-50 rounded-lg p-4 text-center">
+            <p class="text-xs text-green-600 font-semibold uppercase mb-1">Simplified Text</p>
+            <p class="text-4xl font-bold text-green-600" id="simpScore">—</p>
+            <p class="text-sm text-gray-600 mt-1" id="simpLabel">—</p>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <div id="simpBar" class="bg-green-400 h-2 rounded-full transition-all duration-700" style="width:0%"></div>
             </div>
           </div>
         </div>
 
-        <!-- Readability Assessment -->
+        <!-- Improvement badge -->
+        <div id="improvBadge" class="text-center py-2 px-4 rounded-lg text-sm font-medium mb-4"></div>
+
+        <!-- Key stats table -->
+        <table class="w-full text-sm text-gray-700 border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-gray-100 text-gray-500 uppercase text-xs">
+            <tr>
+              <th class="px-4 py-2 text-left">Metric</th>
+              <th class="px-4 py-2 text-center">Original</th>
+              <th class="px-4 py-2 text-center">Simplified</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr class="bg-white">
+              <td class="px-4 py-2 font-medium">Flesch Score</td>
+              <td class="px-4 py-2 text-center text-red-600 font-bold" id="tOrigScore">—</td>
+              <td class="px-4 py-2 text-center text-green-600 font-bold" id="tSimpScore">—</td>
+            </tr>
+            <tr class="bg-gray-50">
+              <td class="px-4 py-2 font-medium">Grade Level</td>
+              <td class="px-4 py-2 text-center" id="tOrigGrade">—</td>
+              <td class="px-4 py-2 text-center" id="tSimpGrade">—</td>
+            </tr>
+            <tr class="bg-white">
+              <td class="px-4 py-2 font-medium">FK Grade</td>
+              <td class="px-4 py-2 text-center" id="tOrigFK">—</td>
+              <td class="px-4 py-2 text-center" id="tSimpFK">—</td>
+            </tr>
+            <tr class="bg-gray-50">
+              <td class="px-4 py-2 font-medium">Avg Sentence Length</td>
+              <td class="px-4 py-2 text-center" id="tOrigSent">—</td>
+              <td class="px-4 py-2 text-center" id="tSimpSent">—</td>
+            </tr>
+            <tr class="bg-white">
+              <td class="px-4 py-2 font-medium">Complex Words</td>
+              <td class="px-4 py-2 text-center" id="tOrigCplx">—</td>
+              <td class="px-4 py-2 text-center" id="tSimpCplx">—</td>
+            </tr>
+            <tr class="bg-gray-50">
+              <td class="px-4 py-2 font-medium">Target Audience</td>
+              <td class="px-4 py-2 text-center" id="tOrigAud">—</td>
+              <td class="px-4 py-2 text-center" id="tSimpAud">—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Suggestions -->
+        <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p class="text-sm font-semibold text-yellow-700 mb-2">
+            <i class="fas fa-lightbulb mr-1"></i>Suggestions
+          </p>
+          <ul id="suggestionsList" class="text-sm text-gray-700 list-disc list-inside space-y-1"></ul>
+        </div>
+      </div>
+      <!-- 3. Term Details -->
+      <div class="bg-white p-6 rounded-lg shadow">
+        <h3 class="text-lg font-semibold mb-4 text-gray-800">
+          <i class="fas fa-table text-blue-400 mr-2"></i>Explanation Details
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+              <tr>
+                <th class="px-4 py-3 text-left">Original Term</th>
+                <th class="px-4 py-3 text-left">Simplified</th>
+                <th class="px-4 py-3 text-left">Explanation</th>
+              </tr>
+            </thead>
+            <tbody id="termsTable" class="bg-white divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. Sources & Confidence -->
+      <div class="grid md:grid-cols-2 gap-6">
         <div class="bg-white p-6 rounded-lg shadow">
-          <h3 class="text-xl font-semibold mb-4">Readability Assessment</h3>
-          <div id="readabilitySection" class="text-gray-700 space-y-2">
-            <!-- Filled by JavaScript -->
+          <h3 class="text-lg font-semibold mb-3 text-gray-800">
+            <i class="fas fa-book-medical text-green-500 mr-2"></i>Verified Sources
+          </h3>
+          <ul id="sourcesList" class="space-y-2 text-gray-700 text-sm"></ul>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-3 text-gray-800">
+            <i class="fas fa-tachometer-alt text-blue-500 mr-2"></i>Confidence Level
+          </h3>
+          <div class="w-full bg-gray-200 rounded-full h-4">
+            <div id="confidenceBar" class="bg-green-500 h-4 rounded-full transition-all duration-500" style="width:0%"></div>
           </div>
-        </div>
-
-        <!-- Validation footer -->
-        <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-center text-green-800">
-          <p class="font-medium">✓ Validated by lay users and medical experts</p>
-          <p class="text-sm mt-1">✓ Accuracy & readability feedback incorporated</p>
+          <p id="confidenceText" class="mt-3 text-center font-semibold text-gray-800"></p>
+          <p class="text-xs text-gray-400 mt-1 text-center">Based on source agreement and human validation</p>
         </div>
       </div>
 
-      <!-- Loading spinner -->
-      <div id="loading" class="hidden col-span-2 text-center py-12">
-        <div class="animate-spin inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
-        <p class="mt-4 text-gray-600">Simplifying medical text...</p>
+      <!-- 5. Validation footer -->
+      <div class="bg-green-50 p-4 rounded-lg border border-green-200 text-center text-green-800">
+        <p class="font-medium">✓ Validated by lay users and medical experts</p>
+        <p class="text-sm mt-1">✓ Accuracy &amp; readability feedback incorporated</p>
       </div>
-    </div>
+
+    </div><!-- end resultsSection -->
   </main>
 
   <script>
-    const btn = document.getElementById('simplifyBtn');
+    const btn      = document.getElementById('simplifyBtn');
     const textArea = document.getElementById('medicalText');
-    const results = document.getElementById('resultsSection');
-    const loading = document.getElementById('loading');
+    const results  = document.getElementById('resultsSection');
+    const loading  = document.getElementById('loading');
 
     btn.addEventListener('click', async () => {
       const input = textArea.value.trim();
-      if (!input) {
-        alert('Please enter some medical text');
-        return;
-      }
+      if (!input) { alert('Please enter some medical text'); return; }
 
-      // Clear all previous content
-      document.getElementById('simplifiedText').innerHTML = '';
-      document.getElementById('termsTable').innerHTML = '';
-      document.getElementById('sourcesList').innerHTML = '';
-      document.getElementById('confidenceText').textContent = '';
-      document.getElementById('confidenceBar').style.width = '0%';
-      document.getElementById('readabilitySection').innerHTML = '';
-
-      // Hide results and show loading
-      results.classList.remove('show');
+      results.classList.add('hidden');
       loading.classList.remove('hidden');
       btn.disabled = true;
 
@@ -144,68 +204,95 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({medical_text: input})
         });
-
         if (!res.ok) throw new Error('Failed to simplify');
-
         const data = await res.json();
 
-        // Fill simplified text
-        document.getElementById('simplifiedText').innerHTML = data.simplified_explanation || 'No explanation available';
+        // Simplified text
+        document.getElementById('simplifiedText').textContent =
+          data.simplified_explanation || 'No explanation available';
 
-        // Fill terms table
+        // Readability
+        const r    = data.readability || {};
+        const orig = r.original   || {};
+        const simp = r.simplified || {};
+
+        // Score cards
+        document.getElementById('origScore').textContent = orig.score ?? '—';
+        document.getElementById('origLabel').textContent = orig.label ?? '—';
+        document.getElementById('simpScore').textContent = simp.score ?? '—';
+        document.getElementById('simpLabel').textContent = simp.label ?? '—';
+
+        setTimeout(() => {
+          document.getElementById('origBar').style.width = Math.min(orig.score || 0, 100) + '%';
+          document.getElementById('simpBar').style.width = Math.min(simp.score || 0, 100) + '%';
+        }, 100);
+
+        // Improvement badge
+        const badge = document.getElementById('improvBadge');
+        const imp = r.improvement;
+        if (imp > 0) {
+          badge.className = 'text-center py-2 px-4 rounded-lg text-sm font-medium mb-4 bg-green-100 text-green-800';
+          badge.textContent = `✅ Readability improved by ${imp} points`;
+        } else if (imp < 0) {
+          badge.className = 'text-center py-2 px-4 rounded-lg text-sm font-medium mb-4 bg-yellow-100 text-yellow-800';
+          badge.textContent = `⚠️ Readability changed by ${imp} points`;
+        } else {
+          badge.className = 'text-center py-2 px-4 rounded-lg text-sm font-medium mb-4 bg-gray-100 text-gray-600';
+          badge.textContent = imp === null ? 'ℹ️ Readability comparison not available' : 'ℹ️ Readability unchanged';
+        }
+
+        // Table
+        document.getElementById('tOrigScore').textContent = orig.score        ?? '—';
+        document.getElementById('tSimpScore').textContent = simp.score        ?? '—';
+        document.getElementById('tOrigGrade').textContent = orig.grade_level  ?? '—';
+        document.getElementById('tSimpGrade').textContent = simp.grade_level  ?? '—';
+        document.getElementById('tOrigFK').textContent    = orig.fk_grade !== undefined ? `Grade ${orig.fk_grade}` : '—';
+        document.getElementById('tSimpFK').textContent    = simp.fk_grade !== undefined ? `Grade ${simp.fk_grade}` : '—';
+        document.getElementById('tOrigSent').textContent  = orig.avg_sentence_len !== undefined ? `${orig.avg_sentence_len} words` : '—';
+        document.getElementById('tSimpSent').textContent  = simp.avg_sentence_len !== undefined ? `${simp.avg_sentence_len} words` : '—';
+        document.getElementById('tOrigCplx').textContent  = orig.complex_words ?? '—';
+        document.getElementById('tSimpCplx').textContent  = simp.complex_words  ?? '—';
+        document.getElementById('tOrigAud').textContent   = orig.audience       ?? '—';
+        document.getElementById('tSimpAud').textContent   = simp.audience       ?? '—';
+
+        // Suggestions
+        const ul = document.getElementById('suggestionsList');
+        ul.innerHTML = '';
+        (r.suggestions || ['No suggestions available.']).forEach(s => {
+          const li = document.createElement('li');
+          li.textContent = s;
+          ul.appendChild(li);
+        });
+
+        // Terms table
         const tbody = document.getElementById('termsTable');
         tbody.innerHTML = '';
-        (data.terms || []).forEach(term => {
+        (data.terms || []).forEach(t => {
           const row = document.createElement('tr');
           row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap">${term.original}</td>
-            <td class="px-6 py-4 whitespace-nowrap">${term.simplified}</td>
-            <td class="px-6 py-4">${term.explanation}</td>
-          `;
+            <td class="px-4 py-3 font-medium text-gray-900 align-top">${t.original}</td>
+            <td class="px-4 py-3 text-blue-700 font-medium align-top">${t.simplified}</td>
+            <td class="px-4 py-3 text-gray-600 align-top">${t.explanation}</td>`;
           tbody.appendChild(row);
         });
 
         // Sources
-        const sourcesUl = document.getElementById('sourcesList');
-        sourcesUl.innerHTML = '';
+        const ul2 = document.getElementById('sourcesList');
+        ul2.innerHTML = '';
         (data.sources || []).forEach(src => {
           const li = document.createElement('li');
-          li.innerHTML = `<span class="text-green-600 mr-2">✓</span> ${src}`;
-          sourcesUl.appendChild(li);
+          li.innerHTML = `<span class="text-green-600 mr-2">✓</span>${src}`;
+          ul2.appendChild(li);
         });
 
         // Confidence
-        const confidenceLabel = data.confidence_label || 'Unknown';
-        const confidenceTextElem = document.getElementById('confidenceText');
-        const confidenceBar = document.getElementById('confidenceBar');
-        if (confidenceLabel.includes('pending') || data.confidence === null || data.confidence === undefined) {
-          confidenceBar.style.width = '0%';
-          confidenceTextElem.textContent = confidenceLabel;
-          confidenceTextElem.style.color = '#6b7280';
-        } else {
-          const conf = data.confidence || 0;
-          confidenceBar.style.width = `${conf}%`;
-          confidenceTextElem.textContent = `${conf}% - ${confidenceLabel}`;
-        }
+        const conf = data.confidence || 0;
+        document.getElementById('confidenceBar').style.width = `${conf}%`;
+        document.getElementById('confidenceText').textContent =
+          `${conf}% — ${data.confidence_label || 'Unknown'}`;
 
-        // Readability (if backend sends it)
-        const readability = data.readability || {};
-        const readabilityDiv = document.getElementById('readabilitySection');
-        if (readability.flesch_reading_ease !== undefined) {
-          readabilityDiv.innerHTML = `
-            <p><strong>Flesch Reading Ease:</strong> ${readability.flesch_reading_ease.toFixed(1)}
-              <span class="text-sm text-gray-500 ml-2">(${readability.ease_label || 'N/A'})</span></p>
-            <p><strong>Flesch-Kincaid Grade Level:</strong> ${readability.flesch_kincaid_grade.toFixed(1)}</p>
-            <p class="text-sm text-gray-500 mt-2 italic">
-              Higher ease score & lower grade level = easier to read for most people
-            </p>
-          `;
-        } else {
-          readabilityDiv.innerHTML = '<p class="text-gray-500 italic">Readability assessment not available</p>';
-        }
-
-        // Show results smoothly
-        results.classList.add('show');
+        results.classList.remove('hidden');
+        results.scrollIntoView({behavior: 'smooth', block: 'start'});
 
       } catch (err) {
         alert('Error: ' + err.message);
