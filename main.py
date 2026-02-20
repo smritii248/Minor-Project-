@@ -242,7 +242,7 @@ def simplify():
                 "terms": [],
                 "sources": [],
                 "confidence": None,
-                "confidence_label": "Not available yet – human validation pending",
+                "confidence_label": "Not available yet, human validation pending",
                 "readability": {
                     "original": orig_assessment,
                     "simplified": None,
@@ -327,23 +327,13 @@ def simplify():
 
         sources = list(sources_set) if sources_set else ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"]
 
-        # Confidence
-        s_retrieval = len(terms_list) / max(len(potential_terms), 1)
-        s_source    = len(sources) / 3
-        confidence  = int((0.5 * s_retrieval + 0.3 * s_source + 0.2 * 0.0) * 100)
-        if confidence >= 80:
-            confidence_label = "High Confidence"
-        elif confidence >= 50:
-            confidence_label = "Medium Confidence"
-        else:
-            confidence_label = "Low Confidence"
+        
 
         return jsonify({
             "simplified_explanation": simplified_explanation,
             "terms":            terms_list,
             "sources":          sources,
-            "confidence":       confidence,
-            "confidence_label": confidence_label,
+            "confidence_label": "Not available yet, human validation pending",
             "readability": {
                 "original":    orig_assessment,
                 "simplified":  simp_assessment,
