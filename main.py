@@ -8,6 +8,9 @@ import sqlite3
 import pandas as pd
 import traceback
 
+# Optional — uncomment if you want readability feature
+# from textstat import flesch_reading_ease, flesch_kincaid_grade
+
 app = Flask(__name__)
 CORS(app)
 
@@ -15,6 +18,7 @@ CORS(app)
 # LOAD EMBEDDING MODEL
 # ==============================
 print("Loading embedding model...")
+embedding_model = None
 try:
     embedding_model = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -22,7 +26,6 @@ try:
     print("Embedding model loaded successfully")
 except Exception as e:
     print(f"Failed to load embedding model: {str(e)}")
-    embedding_model = None
 
 # ==============================
 # LOAD FAISS VECTOR DATABASE
@@ -54,15 +57,13 @@ try:
 except Exception as e:
     print(f"Error loading medical terms from DB: {str(e)}")
     print("→ Using fallback terms for demo")
-    # Fallback so demo doesn't completely fail
+
+# Always have some fallback
+if not medical_terms:
+    print("WARNING: No terms loaded — using fallback")
     medical_terms = {"hypertension", "diabetes", "acromegaly", "paracetamol poisoning"}
 
-# Quick fallback if nothing loaded
-if len(medical_terms) == 0:
-    print("WARNING: No terms loaded — using minimal fallback")
-    medical_terms = {"hypertension", "diabetes"}
-
-# Improved extraction with word boundaries
+# Improved term extraction with word boundaries
 def extract_medical_terms(text):
     text_lower = text.lower()
     found = []
@@ -81,13 +82,12 @@ def index():
 
 @app.route('/health')
 def health():
-    status = {
+    return jsonify({
         "status": "ok",
         "faiss_loaded": vectorstore is not None,
         "terms_loaded": len(medical_terms),
         "embedding_model": embedding_model is not None
-    }
-    return jsonify(status)
+    })
 
 @app.route('/simplify', methods=['POST'])
 def simplify():
@@ -118,19 +118,19 @@ def simplify():
         sources_set = set()
 
         for term in potential_terms:
-            print(f"  Retrieving for: {term}")
+            print(f"Retrieving for: {term}")
             if vectorstore is None:
-                print("    → FAISS not loaded, skipping retrieval")
+                print(" → FAISS not loaded, skipping retrieval")
                 continue
 
             try:
                 docs_with_scores = vectorstore.similarity_search_with_score(term, k=1)
-                print(f"    → Found {len(docs_with_scores)} document(s)")
-                
+                print(f" → Found {len(docs_with_scores)} document(s)")
+
                 if docs_with_scores:
                     doc, score = docs_with_scores[0]
-                    print(f"    → Score: {score:.3f}")
-                    
+                    print(f" → Score: {score:.3f}")
+
                     if score < 0.8:  # adjust threshold if needed
                         if 'term' in doc.metadata:
                             original = doc.metadata['term']
@@ -144,8 +144,9 @@ def simplify():
                         if "source" in doc.metadata:
                             sources_set.add(doc.metadata["source"])
             except Exception as retrieval_err:
-                print(f"    Retrieval error for '{term}': {str(retrieval_err)}")
+                print(f"Retrieval error for '{term}': {str(retrieval_err)}")
 
+        # If no valid terms found after retrieval
         if not terms_list:
             return jsonify({
                 "simplified_explanation": "Found terms but no relevant explanations in the knowledge base.",
@@ -169,12 +170,16 @@ def simplify():
 
         sources = list(sources_set) if sources_set else ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"]
 
+        # Optional: Add readability here if you want it back
+        # readability_info = ... (see previous messages)
+
         return jsonify({
             "simplified_explanation": simplified_explanation,
             "terms": terms_list,
             "sources": sources,
             "confidence": None,
             "confidence_label": "Not available yet – human validation pending"
+            # "readability": readability_info   # ← uncomment if you add it
         })
 
     except Exception as e:
