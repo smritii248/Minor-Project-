@@ -2,16 +2,24 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.llms import Ollama
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 import re
+import os
 import sqlite3
+import numpy as np
 import pandas as pd
 import traceback
+
 
 app = Flask(__name__)
 CORS(app)
 
+
 # ==============================
-# READABILITY FUNCTIONS (Pure Python)
+# READABILITY FUNCTIONS
 # ==============================
 
 def count_syllables(word):
@@ -116,6 +124,7 @@ def full_readability_assessment(text):
         "complex_words":    complex_cnt,
     }
 
+
 # ==============================
 # LOAD EMBEDDING MODEL
 # ==============================
@@ -128,6 +137,7 @@ try:
     print("Embedding model loaded successfully")
 except Exception as e:
     print(f"Failed to load embedding model: {str(e)}")
+
 
 # ==============================
 # LOAD FAISS VECTOR DATABASE
@@ -143,7 +153,7 @@ try:
     print("FAISS index loaded successfully")
 except Exception as e:
     print(f"Error loading FAISS index: {str(e)}")
-    print("→ Make sure the 'faiss_index' folder exists and was created by the notebook.")
+
 
 # ==============================
 # LOAD MEDICAL TERMS FROM DB
@@ -158,11 +168,15 @@ try:
     print(f"Loaded {len(medical_terms)} terms from database")
 except Exception as e:
     print(f"Error loading medical terms from DB: {str(e)}")
-    print("→ Using fallback terms for demo")
 
 if not medical_terms:
-    print("WARNING: No terms loaded — using fallback")
-    medical_terms = {"hypertension", "diabetes", "acromegaly", "paracetamol poisoning"}
+    medical_terms = {
+        "hypertension", "diabetes", "acromegaly", "paracetamol poisoning",
+        "edema", "tachycardia", "bradycardia", "arrhythmia",
+        "myocardial infarction", "dyspnea", "hyperlipidemia",
+        "thrombosis", "embolism", "ischemia", "sepsis", "pneumonia",
+        "anemia", "renal failure", "hepatitis", "fibrillation",
+    }
 
 def extract_medical_terms(text):
     text_lower = text.lower()
@@ -172,6 +186,72 @@ def extract_medical_terms(text):
         if re.search(r'\b' + re.escape(term_lower) + r'\b', text_lower):
             found.append(term)
     return list(set(found))
+
+
+# ==============================
+# INITIALIZE OLLAMA LLM
+# ==============================
+print("Loading Ollama LLM...")
+llm = None
+retriever = None
+try:
+    llm = Ollama(model="llama3")
+    if vectorstore is not None:
+        retriever = vectorstore.as_retriever()
+    print("Ollama LLM loaded successfully")
+except Exception as e:
+    print(f"Failed to load Ollama LLM: {str(e)}")
+
+
+# ==============================
+# LANGCHAIN RAG — MANUAL (no deprecated chain helpers)
+# ==============================
+def get_answer(llm, retriever, question, chat_history):
+    # Step 1: Reformulate question as standalone using history
+    contextualize_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "Given the chat history and the latest user question, reformulate the "
+         "question to be standalone so it can be understood without the chat history. "
+         "Do NOT answer it, just reformulate if needed and return it as is."),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ])
+    contextualize_chain = contextualize_prompt | llm | StrOutputParser()
+
+    if chat_history:
+        standalone_question = contextualize_chain.invoke({
+            "input": question,
+            "chat_history": chat_history
+        })
+    else:
+        standalone_question = question
+
+    # Step 2: Retrieve relevant docs
+    docs = retriever.invoke(standalone_question)
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    # Step 3: Answer with context + history
+    qa_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are MediClare, a clinical assistant that explains medical jargon in "
+         "simple plain English for patients and their families. Be clear, concise, "
+         "and friendly. After any medical term add a plain explanation in brackets. "
+         "Keep to 3-5 sentences.\n\nContext:\n{context}"),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ])
+    qa_chain = qa_prompt | llm | StrOutputParser()
+
+    return qa_chain.invoke({
+        "input": question,
+        "context": context,
+        "chat_history": chat_history
+    })
+
+
+# Chat histories: { session_id: [ HumanMessage | AIMessage, ... ] }
+chat_histories = {}
+
 
 # ==============================
 # ROUTES
@@ -187,7 +267,9 @@ def health():
         "faiss_loaded": vectorstore is not None,
         "terms_loaded": len(medical_terms),
         "embedding_ok": embedding_model is not None,
+        "ollama_ok":    llm is not None,
     })
+
 
 # ==============================
 # /simplify ROUTE
@@ -230,25 +312,26 @@ def simplify():
         for term in potential_terms:
             print(f"Retrieving for: {term}")
             if vectorstore is None:
-                print(" → FAISS not loaded, skipping retrieval")
                 continue
             try:
                 docs_with_scores = vectorstore.similarity_search_with_score(term, k=1)
                 if docs_with_scores:
                     doc, score = docs_with_scores[0]
+                    score = float(score)
                     print(f" → Score: {score:.3f}")
                     if score < 0.8:
-                        if 'term' in doc.metadata:
-                            original    = doc.metadata['term']
-                            simplified  = doc.metadata.get('summary', original.lower())
-                            explanation = doc.page_content.strip() or "Medical term simplified for clarity"
+                        metadata = doc.metadata
+                        if 'term' in metadata:
+                            original    = str(metadata['term'])
+                            simplified  = str(metadata.get('summary', original.lower()))
+                            explanation = str(doc.page_content).strip() or "Medical term simplified for clarity"
                             terms_list.append({
                                 "original":    original,
                                 "simplified":  simplified,
                                 "explanation": explanation
                             })
-                        if "source" in doc.metadata:
-                            sources_set.add(doc.metadata["source"])
+                        if "source" in metadata:
+                            sources_set.add(str(metadata["source"]))
             except Exception as retrieval_err:
                 print(f"Retrieval error for '{term}': {str(retrieval_err)}")
 
@@ -306,10 +389,57 @@ def simplify():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
+# ==============================
+# /chat ROUTE  (Ollama + LangChain RAG)
+# ==============================
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        if llm is None or retriever is None:
+            return jsonify({"error": "Ollama LLM or retriever not initialized."}), 503
+
+        data       = request.get_json()
+        question   = data.get("question", "").strip()
+        session_id = data.get("session_id", "default")
+
+        if not question:
+            return jsonify({"error": "No question provided"}), 400
+
+        # Get or init session history
+        history = chat_histories.setdefault(session_id, [])
+
+        # Get answer using manual RAG
+        answer = get_answer(llm, retriever, question, history)
+
+        # Update history (keep last 20 messages = 10 turns)
+        history.extend([HumanMessage(content=question), AIMessage(content=answer)])
+        chat_histories[session_id] = history[-20:]
+
+        return jsonify({
+            "answer":      answer,
+            "terms_found": extract_medical_terms(question),
+            "session_id":  session_id,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/chat/reset', methods=['POST'])
+def chat_reset():
+    data       = request.get_json() or {}
+    session_id = data.get("session_id", "default")
+    chat_histories[session_id] = []
+    return jsonify({"status": "ok", "message": "Chat history cleared"})
+
+
 # ==============================
 # RUN SERVER
 # ==============================
 if __name__ == '__main__':
-    print("\nStarting server...")
+    print("\nStarting MediClare server...")
     print("→ Open http://localhost:5500 in browser")
+    print("→ Ensure Ollama is running with llama3 model")
     app.run(debug=True, host="0.0.0.0", port=5500)
