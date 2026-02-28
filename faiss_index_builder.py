@@ -16,7 +16,6 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
 
 # ── 1. Re-build df_final (skip if already in notebook memory) ──────────────
-# If running standalone, load your saved CSV:
 # df_final = pd.read_csv("final_dataset.csv")
 
 # ── 2. Drop rows with nulls in either column ──────────────────────────────
