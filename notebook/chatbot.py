@@ -37,7 +37,7 @@ def initialize_chatbot():
     """
     index_file = 'faiss_index.pkl'
 
-    llm = Ollama(model="llama3")
+    llm = Ollama(model="llama3.2:1b")
     db = load_faiss_index(index_file)
     retriever = db.as_retriever()
 
