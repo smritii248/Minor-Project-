@@ -13,6 +13,12 @@ import numpy as np
 import pandas as pd
 import traceback
 
+# ==============================
+# T5 MODEL IMPORTS
+# ==============================
+import torch
+from transformers import AutoTokenizer, T5ForConditionalGeneration
+
 
 app = Flask(__name__)
 CORS(app)
@@ -123,6 +129,68 @@ def full_readability_assessment(text):
         "avg_word_len":     avg_word,
         "complex_words":    complex_cnt,
     }
+
+
+# ==============================
+# LOAD T5 FINE-TUNED MODEL
+# ==============================
+# Expected location: ./t5-medical-finetuned/  (export from Kaggle/Colab notebook)
+# Falls back gracefully if the folder is not present.
+
+T5_MODEL_DIR = os.environ.get("T5_MODEL_DIR", "./t5-medical-finetuned")
+T5_PREFIX    = "simplify medical text: "
+T5_MAX_INPUT = 256
+T5_MAX_OUT   = 128
+
+t5_model     = None
+t5_tokenizer = None
+t5_device    = "cuda" if torch.cuda.is_available() else "cpu"
+
+print(f"T5 device: {t5_device}")
+print(f"Loading T5 model from: {T5_MODEL_DIR} ...")
+
+try:
+    if os.path.isdir(T5_MODEL_DIR):
+        t5_tokenizer = AutoTokenizer.from_pretrained(T5_MODEL_DIR)
+        t5_model     = T5ForConditionalGeneration.from_pretrained(
+            T5_MODEL_DIR,
+            torch_dtype=torch.float32,
+        ).to(t5_device)
+        t5_model.eval()
+        print("✅ T5 fine-tuned model loaded successfully")
+    else:
+        print(f"⚠️  T5 model directory '{T5_MODEL_DIR}' not found — T5 simplification disabled.")
+        print("   Export your trained model from Kaggle/Colab and place it at that path.")
+except Exception as e:
+    print(f"❌ Failed to load T5 model: {e}")
+
+
+def t5_simplify(text: str) -> str:
+    """Run the fine-tuned T5 model to simplify a medical text.
+
+    Returns the simplified string, or raises RuntimeError if the model
+    is not loaded.
+    """
+    if t5_model is None or t5_tokenizer is None:
+        raise RuntimeError("T5 model is not loaded.")
+
+    input_ids = t5_tokenizer(
+        T5_PREFIX + text,
+        return_tensors="pt",
+        max_length=T5_MAX_INPUT,
+        truncation=True,
+    ).input_ids.to(t5_device)
+
+    with torch.no_grad():
+        output_ids = t5_model.generate(
+            input_ids,
+            max_length=T5_MAX_OUT,
+            num_beams=4,
+            early_stopping=True,
+            no_repeat_ngram_size=3,
+        )
+
+    return t5_tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
 
 # ==============================
@@ -268,6 +336,8 @@ def health():
         "terms_loaded": len(medical_terms),
         "embedding_ok": embedding_model is not None,
         "ollama_ok":    llm is not None,
+        "t5_loaded":    t5_model is not None,
+        "t5_device":    t5_device,
     })
 
 
@@ -278,7 +348,7 @@ def health():
 def simplify():
     print("\n=== NEW SIMPLIFY REQUEST ===")
     try:
-        data = request.get_json()
+        data      = request.get_json()
         user_text = data.get("medical_text", "").strip()
         print("Input text:", user_text)
 
@@ -288,6 +358,53 @@ def simplify():
         orig_assessment = full_readability_assessment(user_text)
         potential_terms = extract_medical_terms(user_text)
         print("Extracted terms:", potential_terms)
+
+        # ------------------------------------------------------------------
+        # PRIMARY PATH — T5 fine-tuned model
+        # ------------------------------------------------------------------
+        if t5_model is not None:
+            print("Using T5 model for simplification...")
+            try:
+                simplified_explanation = t5_simplify(user_text)
+                if not simplified_explanation.endswith('.'):
+                    simplified_explanation += '.'
+
+                simp_assessment = full_readability_assessment(simplified_explanation)
+                improvement     = round(simp_assessment["score"] - orig_assessment["score"], 1)
+                suggestions     = get_suggestions(
+                    orig_assessment["score"], simp_assessment["score"],
+                    orig_assessment["avg_sentence_len"],
+                    orig_assessment["avg_word_len"],
+                    orig_assessment["complex_words"]
+                )
+
+                # Build a lightweight terms list from detected terms for
+                # display purposes (T5 rewrites the whole sentence, so we
+                # just surface which terms were spotted).
+                terms_list = [{"original": t, "simplified": t, "explanation": ""} for t in potential_terms]
+
+                return jsonify({
+                    "simplified_explanation": simplified_explanation,
+                    "terms":            terms_list,
+                    "sources":          ["Fine-tuned T5 (flan-t5-base)"],
+                    "simplification_method": "t5",
+                    "confidence_label": "Not available yet, human validation pending",
+                    "readability": {
+                        "original":    orig_assessment,
+                        "simplified":  simp_assessment,
+                        "improvement": improvement,
+                        "suggestions": suggestions,
+                    }
+                })
+
+            except Exception as t5_err:
+                # T5 failed mid-way — fall through to FAISS path
+                print(f"T5 simplification error: {t5_err} — falling back to FAISS")
+
+        # ------------------------------------------------------------------
+        # FALLBACK PATH — FAISS term-by-term replacement (original logic)
+        # ------------------------------------------------------------------
+        print("Using FAISS fallback for simplification...")
 
         if not potential_terms:
             suggestions = get_suggestions(
@@ -299,6 +416,7 @@ def simplify():
             return jsonify({
                 "simplified_explanation": "No medical terms detected in the input.",
                 "terms": [], "sources": [], "confidence": None,
+                "simplification_method": "none",
                 "confidence_label": "Not available yet, human validation pending",
                 "readability": {
                     "original": orig_assessment, "simplified": None,
@@ -345,7 +463,9 @@ def simplify():
             return jsonify({
                 "simplified_explanation": "Found terms but no relevant explanations in the knowledge base.",
                 "terms": [], "sources": ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"],
-                "confidence": None, "confidence_label": "Not available yet – human validation pending",
+                "confidence": None,
+                "simplification_method": "faiss",
+                "confidence_label": "Not available yet – human validation pending",
                 "readability": {
                     "original": orig_assessment, "simplified": None,
                     "improvement": None, "suggestions": suggestions
@@ -375,6 +495,7 @@ def simplify():
             "simplified_explanation": simplified_explanation,
             "terms":            terms_list,
             "sources":          sources,
+            "simplification_method": "faiss",
             "confidence_label": "Not available yet, human validation pending",
             "readability": {
                 "original":    orig_assessment,
@@ -442,4 +563,5 @@ if __name__ == '__main__':
     print("\nStarting MediClare server...")
     print("→ Open http://localhost:5500 in browser")
     print("→ Ensure Ollama is running with llama3 model")
+    print(f"→ T5 model: {'loaded ✅' if t5_model else 'not found ⚠️  (FAISS fallback active)'}")
     app.run(debug=True, host="0.0.0.0", port=5500)
