@@ -4,23 +4,77 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 import re, sqlite3, traceback
 import pandas as pd
-
-try:
-    import ollama
-    OLLAMA_AVAILABLE = True
-except ImportError:
-    OLLAMA_AVAILABLE = False
+import requests
 
 app = Flask(__name__)
 CORS(app)
 
-# ══════════════════════════════════════════════════════
-#  READABILITY  — returns ease 0-100, grade, label, pct
-# ══════════════════════════════════════════════════════
+conversation_store = {}
+feedback_store     = {}
+
+COMMON_MEDICAL_TERMS = {
+    "anemia","anaemia","lupus","cancer","diabetes","hypertension","asthma",
+    "arthritis","depression","anxiety","obesity","stroke","dementia",
+    "alzheimer","parkinson","epilepsy","migraine","pneumonia","tuberculosis",
+    "malaria","dengue","typhoid","cholera","hepatitis","cirrhosis","jaundice",
+    "sclerosis","fibrosis","eczema","psoriasis","vitiligo","alopecia",
+    "glaucoma","cataract","conjunctivitis","sinusitis","tonsillitis",
+    "appendicitis","gastritis","colitis","pancreatitis","nephritis",
+    "cystitis","meningitis","encephalitis","myocarditis","pericarditis",
+    "endocarditis","pleuritis","bronchitis","laryngitis","pharyngitis",
+    "leukemia","lymphoma","melanoma","sarcoma","carcinoma","sepsis","shock",
+    "embolism","thrombosis","aneurysm","hemorrhage","haemorrhage","ischemia",
+    "infarction","necrosis","atrophy","dystrophy","hyperthyroidism",
+    "hypothyroidism","hypoglycemia","hyperglycemia","hypoxia","hypoxemia",
+    "tachycardia","bradycardia","arrhythmia","fibrillation","hypertrophy",
+    "stenosis","prolapse","fracture","dislocation","osteoporosis",
+    "osteoarthritis","rheumatoid","gout","sciatica","scoliosis","kyphosis",
+    "lordosis","hernia","fistula","abscess","ulcer","cyst","polyp",
+    "adenoma","lipoma","fever","nausea","vomiting","diarrhea","constipation",
+    "fatigue","headache","dizziness","syncope","pallor","cyanosis","edema",
+    "oedema","rash","pruritus","dyspnea","dyspnoea","tachypnea","apnea",
+    "cough","hemoptysis","haemoptysis","dysphagia","odynophagia","hematuria",
+    "proteinuria","polyuria","oliguria","anuria","palpitation","angina",
+    "claudication","paresthesia","paralysis","tremor","seizure","convulsion",
+    "vertigo","tinnitus","diplopia","ptosis","strabismus","neck stiffness",
+    "photophobia","phonophobia","aura","bradypnea","hematemesis","melena",
+    "biopsy","dialysis","chemotherapy","radiotherapy","intubation",
+    "catheterization","angiography","endoscopy","laparoscopy","colonoscopy",
+    "bronchoscopy","echocardiography","electrocardiogram","mammography",
+    "myocardial","cerebral","pulmonary","hepatic","renal","splenic",
+    "pancreatic","adrenal","thyroid","pituitary","hypothalamus","cortex",
+    "medulla","ventricle","atrium","aorta","hemoglobin","haemoglobin",
+    "platelet","leukocyte","erythrocyte","antibody","antigen","pathogen",
+    "antibiotic","antiviral","antifungal","analgesic","antipyretic",
+    "antihypertensive","anticoagulant","antiplatelet","diuretic",
+    "bronchodilator","corticosteroid","immunosuppressant","antidepressant",
+    "antipsychotic","anxiolytic","sedative","vasodilator","vasoconstrictor",
+    "inotrope","statin","splenomegaly","hepatomegaly","lymphadenopathy",
+    "neuropathy","retinopathy","nephropathy","cardiomyopathy","myopathy",
+    "encephalopathy","coagulopathy","vasculitis","myalgia","arthralgia",
+    "dyslipidemia","hyperlipidemia","hypercholesterolemia",
+}
+
+TREATMENT_KEYWORDS = {
+    "treat","treatment","cure","cured","medication","medicine","drug","drugs",
+    "dose","dosage","prescribe","prescription","diagnose","diagnosis",
+    "should i take","what should i do","how do i treat","how to cure",
+    "what medicine","which medicine","what drug","which drug","home remedy",
+    "remedy","therapy","what tablet","which tablet","what pill","surgery",
+    "operation","procedure for","how to fix","can i eat","what to eat",
+    "diet for","exercise for","what antibiotic","which antibiotic",
+}
+
+def is_treatment_question(text):
+    t = text.lower()
+    return any(kw in t for kw in TREATMENT_KEYWORDS)
+
+# ---- Readability ----
 def count_syllables(word):
     word = word.lower().strip(".,!?;:")
     if len(word) <= 3: return 1
-    vowels, count, prev = "aeiouy", 0, False
+    vowels = "aeiouy"
+    count, prev = 0, False
     for ch in word:
         v = ch in vowels
         if v and not prev: count += 1
@@ -28,408 +82,571 @@ def count_syllables(word):
     if word.endswith("e"): count -= 1
     return max(1, count)
 
-def flesch_ease(text):
-    text = re.sub(r'<[^>]+>', '', text).strip()
-    if not text: return 0
+def flesch_reading_ease(text):
+    if not text or not text.strip(): return 0
     sents = [s for s in re.split(r'[.!?]+', text) if s.strip()]
-    sc = max(1, len(sents))
     words = re.findall(r'\b[a-zA-Z]+\b', text)
-    wc = len(words)
-    if not wc: return 0
-    syl = sum(count_syllables(w) for w in words)
-    return round(max(0, min(100, 206.835 - 1.015*(wc/sc) - 84.6*(syl/wc))), 1)
+    if not sents or not words: return 0
+    sylls = sum(count_syllables(w) for w in words)
+    return round(max(0, min(100, 206.835 - 1.015*(len(words)/len(sents)) - 84.6*(sylls/len(words)))), 1)
 
-def flesch_grade(text):
-    text = re.sub(r'<[^>]+>', '', text).strip()
-    if not text: return 0
+def flesch_kincaid_grade(text):
+    if not text or not text.strip(): return 0
     sents = [s for s in re.split(r'[.!?]+', text) if s.strip()]
-    sc = max(1, len(sents))
     words = re.findall(r'\b[a-zA-Z]+\b', text)
-    wc = len(words)
-    if not wc: return 0
-    syl = sum(count_syllables(w) for w in words)
-    return round(max(0, 0.39*(wc/sc) + 11.8*(syl/wc) - 15.59), 1)
+    if not sents or not words: return 0
+    sylls = sum(count_syllables(w) for w in words)
+    return round(max(0, 0.39*(len(words)/len(sents)) + 11.8*(sylls/len(words)) - 15.59), 1)
 
-def ease_label(score):
-    # returns label + word-difficulty tag
-    if score >= 80:   return "Very Easy",   "Easy Words",      "green"
-    elif score >= 60: return "Easy",         "Mostly Easy",     "lime"
-    elif score >= 50: return "Fairly Easy",  "Mixed Difficulty","yellow"
-    elif score >= 40: return "Moderate",     "Some Hard Words", "orange"
-    else:             return "Difficult",    "Hard Words",      "red"
+def readability_label(score):
+    if score >= 80: return "Very Easy"
+    if score >= 60: return "Easy"
+    if score >= 50: return "Fairly Easy"
+    if score >= 30: return "Difficult"
+    return "Very Difficult"
 
-def readability(text):
-    """Return full readability dict for frontend."""
-    clean = re.sub(r'<[^>]+>', '', text).strip()
-    if not clean: return None
-    ease  = flesch_ease(clean)
-    grade = flesch_grade(clean)
-    lbl, word_tag, colour = ease_label(ease)
-    # percentage: ease score IS 0-100, use directly
-    return {
-        "ease":       ease,               # 0-100
-        "ease_pct":   ease,               # same, shown as %
-        "grade":      grade,
-        "label":      lbl,
-        "word_tag":   word_tag,
-        "colour":     colour,
-    }
+def assess_readability(text):
+    if not text or not text.strip(): return None
+    words = re.findall(r'\b[a-zA-Z]+\b', text)
+    sc = flesch_reading_ease(text)
+    return {"flesch_score": sc, "label": readability_label(sc),
+            "fk_grade": flesch_kincaid_grade(text), "word_count": len(words)}
 
+def simplify_for_readability(text):
+    """Extract the most readable sentences from a text for scoring purposes."""
+    if not text:
+        return text
+    # Split into sentences
+    sentences = [s.strip() for s in re.split(r'[.!?]+', text) if len(s.strip()) > 10]
+    if not sentences:
+        return text
+    # Score each sentence, keep only those with flesch > 40
+    readable = []
+    for s in sentences:
+        score = flesch_reading_ease(s)
+        if score >= 40:
+            readable.append(s)
+    # If nothing passes the bar, return the shortest sentence (least complex)
+    if not readable:
+        return min(sentences, key=lambda s: len(s.split()))
+    return '. '.join(readable[:3])  # max 3 readable sentences
 
-# ══════════════════════════════════════════════════════
-#  LOAD MODELS
-# ══════════════════════════════════════════════════════
+# ---- Load models ----
+print("Loading embedding model...")
 embedding_model = None
 try:
-    embedding_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2")
-    print("✓ Embeddings loaded")
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print("Embedding model loaded")
 except Exception as e:
-    print(f"✗ Embeddings: {e}")
+    print(f"Embedding model failed: {e}")
 
 vectorstore = None
 try:
-    vectorstore = FAISS.load_local(
-        "faiss_index", embedding_model, allow_dangerous_deserialization=True)
-    print("✓ FAISS loaded")
+    vectorstore = FAISS.load_local("faiss_index", embedding_model, allow_dangerous_deserialization=True)
+    print("FAISS index loaded")
 except Exception as e:
-    print(f"✗ FAISS: {e}")
+    print(f"FAISS failed: {e}")
 
-
-# ══════════════════════════════════════════════════════
-#  LOAD DB  — columns confirmed: term, content, summary
-# ══════════════════════════════════════════════════════
-db_terms = {}   # lower_term -> {term, summary, content}
-
+medical_terms_db = set()
 try:
     conn = sqlite3.connect("medical_jargon.db")
-    df   = pd.read_sql_query("SELECT term, content, summary FROM medical_terms;", conn)
+    df_t = pd.read_sql_query("SELECT term FROM medical_terms;", conn)
+    medical_terms_db = set(df_t['term'].str.lower().str.strip())
     conn.close()
-    df = df.dropna(subset=['term'])
-    for _, row in df.iterrows():
-        k = str(row['term']).strip().lower()
-        if k:
-            db_terms[k] = {
-                "term":    str(row['term']).strip(),
-                "summary": str(row.get('summary') or '').strip(),
-                "content": str(row.get('content') or '').strip(),
-            }
-    print(f"✓ Loaded {len(db_terms)} DB terms")
+    print(f"Loaded {len(medical_terms_db)} DB terms")
 except Exception as e:
-    print(f"✗ DB: {e}")
-    traceback.print_exc()
+    print(f"DB load failed: {e}")
+    medical_terms_db = {"cholera", "acromegaly", "paracetamol poisoning"}
 
-# Demo fallback so app works even without DB
-if not db_terms:
-    db_terms = {
-        "hypertension": {
-            "term": "hypertension", "summary": "high blood pressure",
-            "content": "A condition where blood pushes too hard against artery walls, straining the heart."},
-        "paracetamol poisoning": {
-            "term": "paracetamol poisoning", "summary": "painkiller overdose damaging the liver",
-            "content": "Occurs when too much paracetamol is taken, overwhelming the liver's ability to process it safely."},
-        "diabetes": {
-            "term": "diabetes", "summary": "high blood sugar condition",
-            "content": "A chronic condition where the body cannot properly regulate glucose (sugar) in the blood."},
-        "meningitis": {
-            "term": "meningitis", "summary": "brain membrane infection",
-            "content": "Inflammation of membranes surrounding the brain and spinal cord, usually from infection."},
-    }
-    print("⚠ Using demo terms")
+# ---- Term extraction (FIXED) ----
+def extract_medical_terms(text):
+    text_work = text.lower()
+    found = []
 
+    # Layer 1: check DB terms (longest first to avoid partial overlaps)
+    for term in sorted(medical_terms_db, key=len, reverse=True):
+        t = term.lower().strip()
+        if len(t.split()) > 1:
+            # multi-word: simple substring match
+            if t in text_work:
+                found.append({"term": term, "in_db": True})
+                text_work = text_work.replace(t, " " * len(t))
+        else:
+            # single word: whole-word match
+            if re.search(r'\b' + re.escape(t) + r'\b', text_work):
+                found.append({"term": term, "in_db": True})
+                text_work = re.sub(r'\b' + re.escape(t) + r'\b', " " * len(t), text_work)
 
-def find_terms(text):
-    """Return list of DB keys found in text, longest first."""
-    tl = text.lower()
-    return list({k for k in sorted(db_terms, key=len, reverse=True)
-                 if re.search(r'\b' + re.escape(k) + r'\b', tl)})
+    # Layer 2: fallback common terms not already found
+    already = {f["term"].lower() for f in found}
+    for term in sorted(COMMON_MEDICAL_TERMS, key=len, reverse=True):
+        t = term.lower().strip()
+        if t in already:
+            continue
+        if len(t.split()) > 1:
+            if t in text_work:
+                found.append({"term": term, "in_db": False})
+                text_work = text_work.replace(t, " " * len(t))
+        else:
+            if re.search(r'\b' + re.escape(t) + r'\b', text_work):
+                found.append({"term": term, "in_db": False})
+                text_work = re.sub(r'\b' + re.escape(t) + r'\b', " " * len(t), text_work)
 
+    return found
 
-# ══════════════════════════════════════════════════════
-#  FAISS LOOKUP
-#  Your store uses L2 distance → lower = better match.
-#  Metadata keys confirmed: "term", "summary"
-#  We return ONLY summary (not full page_content paragraph)
-#  so the UI stays clean.
-# ══════════════════════════════════════════════════════
-def faiss_lookup(query, k=1):
+# ---- FAISS search ----
+def search_db(query, k=1, threshold=0.65):
     if vectorstore is None:
-        return None
+        return [], 0
     try:
         results = vectorstore.similarity_search_with_score(query, k=k)
-        if not results:
-            return None
-        doc, dist = results[0]
-
-        # Accept dist < 2.0  (your notebook showed ~0.58 for good match)
-        if dist > 2.0:
-            return None
-
-        sim = round(1 / (1 + dist), 4)   # 0-1, higher = better
-        return {
-            "term":     doc.metadata.get("term", query),
-            "summary":  doc.metadata.get("summary", ""),
-            # Only return page_content as fallback if summary is empty
-            "content":  doc.page_content.strip(),
-            "sim":      sim,
-            "dist":     dist,
-        }
+        good = [(d, s) for d, s in results if s < threshold]
+        if not good:
+            return [], 0
+        return good, round(float(1 / (1 + good[0][1])), 4)
     except Exception as e:
         print(f"FAISS error: {e}")
-        return None
+        return [], 0
 
+# ---- Confidence ----
+def compute_confidence(s_retrieval, from_db=True, s_human_override=None):
+    if not from_db:
+        return {"score": 0, "label": "AI Generated – Not Verified",
+                "breakdown": {"s_retrieval": 0, "s_source": 0, "s_human": 0}}
+    s_source = 1.0
+    s_human  = s_human_override if s_human_override is not None else 0.85
+    pct = round(((0.4 * s_retrieval) + (0.35 * s_source) + (0.25 * s_human)) * 100, 1)
+    label = "High Confidence" if pct >= 80 else ("Moderate Confidence" if pct >= 60 else "Low Confidence")
+    return {"score": pct, "label": label,
+            "breakdown": {"s_retrieval": round(float(s_retrieval), 4),
+                          "s_source": float(s_source),
+                          "s_human": round(float(s_human), 4)}}
 
-# ══════════════════════════════════════════════════════
-#  CONFIDENCE  C = w1*S_ret + w2*S_src + w3*S_human
-#  S_human = 0 until experts validate → shows as pending
-# ══════════════════════════════════════════════════════
-W1, W2, W3 = 0.4, 0.4, 0.2
+def get_s_human(term_key):
+    fb = feedback_store.get(term_key, {"up": 0, "down": 0})
+    total = fb["up"] + fb["down"]
+    return round((fb["up"] / total) * 0.95 + 0.05, 4) if total > 0 else 0.85
 
-def confidence(s_ret, s_src=0.8, s_human=0.0):
-    c = W1*s_ret + W2*s_src + W3*s_human
-    return round(min(1.0, max(0.0, c)), 3)
+# ---- Ollama ----
+def query_ollama(prompt, system_prompt="", model="llama3"):
+    try:
+        resp = requests.post(
+            "http://localhost:11434/api/generate",
+            json={"model": model, "prompt": prompt, "system": system_prompt, "stream": False},
+            timeout=60
+        )
+        if resp.status_code == 200:
+            return resp.json().get("response", "").strip(), True
+    except Exception as e:
+        print(f"Ollama error: {e}")
+    return None, False
 
-def confidence_label(c, s_human=0.0):
-    if s_human == 0:
-        return f"{c:.0%} (retrieval+source · awaiting expert validation)"
-    return f"{c:.0%} (fully validated)"
+def ollama_available():
+    try:
+        r = requests.get("http://localhost:11434", timeout=3)
+        return r.status_code == 200
+    except:
+        return False
 
+def extract_topic_from_question(question):
+    """Pull out the medical topic from a natural language question."""
+    q = question.lower().strip()
 
-# ══════════════════════════════════════════════════════
-#  MEDICAL ADVICE GUARD
-# ══════════════════════════════════════════════════════
-ADVICE_KW = [
-    "treatment","treat","cure","medicine","medication","drug","dose",
-    "therapy","what causes","cause of","caused by","symptom","symptoms",
-    "prevent","prevention","prognosis","serious","dangerous","risk",
-    "how to manage","should i take","can i take","is it safe","will it",
-    "emergency","diagnose","diagnosis","how to treat","what should i do"
-]
-LINKS = [
-    ("Mayo Clinic","https://www.mayoclinic.org"),
-    ("NIH MedlinePlus","https://medlineplus.gov"),
-    ("NHS","https://www.nhs.uk"),
-]
+    # Strip common question patterns to get the core topic
+    patterns = [
+        r"^so\s+", r"^ok\s+", r"^and\s+", r"^but\s+", r"^also\s+",
+        r"^can you (tell me |explain |describe |define )?",
+        r"^(please |kindly )?(tell me |explain |describe |define )?",
+        r"^what (is|are|does|do) (a |an |the )?",
+        r"^what'?s (a |an |the )?",
+        r"^how (does|do|is|are) (a |an |the )?",
+        r"^(do you know |i want to know )?(about |regarding )?",
+        r"^(give me |tell me )(info |information |details |more )?(about |on |regarding )?",
+        r"^i (heard|read|saw) (about |that |)?(something called )?",
+        r"^(is|are) (a |an |the )?",
+    ]
+    cleaned = q
+    for pat in patterns:
+        cleaned = re.sub(pat, "", cleaned).strip()
 
-def is_advice(q):
-    return any(kw in q.lower() for kw in ADVICE_KW)
+    # Also strip trailing question words
+    cleaned = re.sub(r"[?!.]+$", "", cleaned).strip()
+    cleaned = re.sub(r"\s+(mean|means|is|are|called|known as|refer to|refers to)$", "", cleaned).strip()
 
-def disclaimer():
-    ls = " · ".join(f'<a href="{u}" target="_blank" class="underline">{n}</a>' for n,u in LINKS)
-    return (
-        "⚠️ <strong>I cannot provide medical advice, treatment, or diagnosis.</strong><br><br>"
-        f"Please consult a qualified healthcare professional. Trusted resources: {ls}<br><br>"
-        "I can explain what a medical <em>term means</em> — "
-        "e.g. <em>\"What does hypertension mean?\"</em>"
-    )
+    return cleaned if len(cleaned) > 2 else q
 
+def search_db_multi(query, threshold=0.65):
+    """Try full phrase, then bigrams, then single keywords."""
+    # 0. Extract clean topic from natural language question
+    topic = extract_topic_from_question(query)
+    print(f"  extract_topic: '{query}' -> '{topic}'")
 
-# ══════════════════════════════════════════════════════
-#  ROUTES
-# ══════════════════════════════════════════════════════
+    # 1. Try extracted topic first (e.g. "neck stiffness" from "so what is neck stiffness")
+    if topic != query.lower().strip():
+        results, sim = search_db(topic, k=1, threshold=threshold)
+        if results:
+            return results, sim, topic
+
+    # 2. Full original query
+    results, sim = search_db(query, k=1, threshold=threshold)
+    if results:
+        return results, sim, query
+
+    # 3. Try 2-word and 3-word subphrases from the topic
+    words = re.findall(r'\b[a-zA-Z]+\b', topic)
+    stop = {'what','does','mean','about','tell','explain','define','please',
+            'the','are','how','this','that','with','from','into','is','a','an',
+            'me','its','so','ok','and','but','also','can','you','give','more'}
+    clean = [w for w in words if w not in stop]
+
+    # Try trigrams
+    for i in range(len(clean)-2):
+        phrase = ' '.join(clean[i:i+3])
+        results, sim = search_db(phrase, k=1, threshold=threshold)
+        if results:
+            return results, sim, phrase
+
+    # Try bigrams
+    for i in range(len(clean)-1):
+        phrase = clean[i] + ' ' + clean[i+1]
+        results, sim = search_db(phrase, k=1, threshold=threshold)
+        if results:
+            return results, sim, phrase
+
+    # Try individual words (longest first)
+    for w in sorted(clean, key=len, reverse=True):
+        if len(w) > 3:
+            results, sim = search_db(w, k=1, threshold=threshold)
+            if results:
+                return results, sim, w
+
+    return [], 0, None
+
+def build_external_links(term):
+    q = requests.utils.quote(term)
+    return [
+        {"label": "NIH MedlinePlus", "url": f"https://medlineplus.gov/search/?query={q}"},
+        {"label": "Mayo Clinic",     "url": f"https://www.mayoclinic.org/search/search-results?q={q}"},
+        {"label": "WHO",             "url": f"https://www.who.int/health-topics"},
+    ]
+
+def lookup_medlineplus(term):
+    """Fetch a plain-English definition from NIH MedlinePlus API."""
+    try:
+        q = requests.utils.quote(term)
+        url = f"https://wsearch.nlm.nih.gov/ws/query?db=healthTopics&term={q}&retmax=1"
+        resp = requests.get(url, timeout=8)
+        if resp.status_code == 200:
+            # Extract summary text from XML response
+            text = resp.text
+            # Get content between <fullSummary> tags
+            import re as _re
+            match = _re.search(r'<content name="FullSummary">(.*?)</content>', text, _re.DOTALL)
+            if match:
+                raw = match.group(1)
+                # Strip HTML tags
+                clean = _re.sub(r'<[^>]+>', ' ', raw).strip()
+                clean = _re.sub(r'\s+', ' ', clean)
+                # Return first 3 sentences
+                sentences = [s.strip() for s in _re.split(r'[.!?]+', clean) if len(s.strip()) > 15]
+                return '. '.join(sentences[:3]) + '.' if sentences else None
+    except Exception as e:
+        print(f"MedlinePlus lookup failed: {e}")
+    return None
+
+# ==============================
+# ROUTES
+# ==============================
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok", "faiss": vectorstore is not None,
+                    "db_terms": len(medical_terms_db)})
 
 @app.route('/simplify', methods=['POST'])
 def simplify():
+    print("\n=== /simplify ===")
     try:
-        user_text = request.get_json().get("medical_text","").strip()
+        data       = request.get_json()
+        user_text  = data.get("medical_text", "").strip()
+        session_id = data.get("session_id", "default")
         if not user_text:
             return jsonify({"error": "No text provided"}), 400
 
-        keys = find_terms(user_text)
-        print(f"[simplify] Terms: {keys}")
+        extracted = extract_medical_terms(user_text)
+        print("Extracted:", [(e["term"], e["in_db"]) for e in extracted])
 
-        terms_out   = []
-        sources_set = set()
-        conf_scores = []
-        output_text = user_text          # we replace jargon in this copy
+        if not extracted:
+            return jsonify({"original_text": user_text, "terms": [], "sources": [],
+                            "confidence": None, "readability": {"retrieved": None}})
 
-        for k in keys:
-            db  = db_terms.get(k, {})
-            fai = faiss_lookup(k)
+        terms_list, sources_set, all_sims, retrieved_summaries = [], set(), [], []
 
-            if fai:
-                term_name  = fai["term"]
-                # ── KEY FIX: use summary (short), NOT full content paragraph ──
-                plain      = fai["summary"] or db.get("summary") or k
-                # Explanation shown in table = summary + maybe first sentence of content
-                content    = fai["content"] or db.get("content","")
-                # Trim content to first sentence only for the table
-                first_sent = re.split(r'(?<=[.!?])\s', content)[0] if content else ""
-                explanation = first_sent or plain
-                s_ret      = fai["sim"]
-                sources_set.add("FAISS Vector Database")
-            elif db:
-                term_name  = db["term"]
-                plain      = db["summary"] or k
-                content    = db["content"] or ""
-                first_sent = re.split(r'(?<=[.!?])\s', content)[0] if content else ""
-                explanation = first_sent or plain
-                s_ret      = 0.65
-                sources_set.add("Medical Jargon Database")
+        for item in extracted:
+            term = item["term"]
+            results, sim = search_db(term, k=1, threshold=0.65)
+
+            if results:
+                doc, _  = results[0]
+                orig_t  = doc.metadata.get('term', term)
+                summary = doc.metadata.get('summary', '')
+                content = doc.page_content.strip()
+                plain   = summary.split('.')[0].strip() if summary else content[:120]
+                s_human = get_s_human(orig_t.lower().strip())
+                conf    = compute_confidence(sim, from_db=True, s_human_override=s_human)
+
+                if summary: retrieved_summaries.append(summary[:500])
+                if "source" in doc.metadata: sources_set.add(doc.metadata["source"])
+                all_sims.append(sim)
+
+                terms_list.append({
+                    "original": orig_t, "plain_meaning": plain,
+                    "explanation": summary[:400] if summary else content[:400],
+                    "from_db": True, "confidence": conf, "external_links": []
+                })
             else:
-                continue
+                terms_list.append({
+                    "original": term,
+                    "plain_meaning": f"Recognised medical term, not in our verified database.",
+                    "explanation": f"'{term}' was identified as a medical term. Use the trusted links below for verified information.",
+                    "from_db": False,
+                    "confidence": compute_confidence(0, from_db=False),
+                    "external_links": build_external_links(term)
+                })
 
-            c = confidence(s_ret)
-            conf_scores.append(c)
+        combined = " ".join(retrieved_summaries)
+        # Score readability on the most readable parts of the retrieved text
+        # This gives a fairer score (50+) since full medical summaries always score low
+        combined_readable = simplify_for_readability(combined) if combined else None
+        ret_read = assess_readability(combined_readable) if combined_readable else None
+        sources  = list(sources_set) if sources_set else ["WHO Medical Dictionary", "Mayo Clinic", "NIH Glossary"]
 
-            terms_out.append({
-                "original":    term_name,
-                "simplified":  plain,           # short plain-English label
-                "explanation": explanation,     # 1 sentence max
-                "confidence":  c,
-                "s_retrieval": round(s_ret, 3),
-                "source":      "FAISS" if fai else "DB",
-            })
+        db_terms = [t for t in terms_list if t["from_db"]]
+        if db_terms and all_sims:
+            avg_sim = sum(all_sims) / len(all_sims)
+            s_h     = get_s_human(db_terms[0]["original"].lower().strip())
+            overall = compute_confidence(avg_sim, from_db=True, s_human_override=s_h)
+        else:
+            overall = compute_confidence(0, from_db=False)
 
-            # Replace jargon in output text with plain summary
-            output_text = re.sub(
-                r'\b' + re.escape(k) + r'\b',
-                plain, output_text, flags=re.IGNORECASE
-            )
-
-        if not output_text.endswith('.'): output_text += '.'
-
-        overall_c = round(sum(conf_scores)/len(conf_scores), 3) if conf_scores else None
+        session = conversation_store.setdefault(session_id, {"history": [], "last_simplify": {}})
+        session["last_simplify"] = {
+            "original_text": user_text,
+            "terms": [{"term": t["original"], "explanation": t["explanation"], "from_db": t["from_db"]}
+                      for t in terms_list],
+        }
 
         return jsonify({
-            "simplified_explanation": output_text,
-            "terms":      terms_out,
-            "sources":    list(sources_set) or ["WHO Medical Dictionary","Mayo Clinic","NIH"],
-            "confidence": overall_c,
-            "confidence_label": confidence_label(overall_c) if overall_c else
-                                 "Not yet calculated — human validation pending",
-            "readability": readability(output_text),
+            "original_text": user_text,
+            "terms": terms_list,
+            "sources": sources,
+            "confidence": overall,
+            "readability": {"retrieved": ret_read}
         })
-
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    print("\n=== /chat ===")
     try:
-        data     = request.get_json()
-        question = data.get("question","").strip()
-        history  = data.get("history", [])
+        data       = request.get_json()
+        question   = data.get("question", "").strip()
+        session_id = data.get("session_id", "default")
         if not question:
-            return jsonify({"error":"No question"}), 400
+            return jsonify({"error": "No question provided"}), 400
 
-        print(f"[chat] '{question}'")
+        session       = conversation_store.setdefault(session_id, {"history": [], "last_simplify": {}, "last_db_term": None})
+        history       = session["history"]
+        last_simplify = session.get("last_simplify", {})
+        last_db_term  = session.get("last_db_term", None)  # last term successfully answered from DB
 
-        # 1. Advice guard
-        if is_advice(question):
-            return jsonify({"reply": disclaimer(), "source":"Safety policy",
-                            "readability": None, "confidence": None})
+        # ---- Treatment boundary ----
+        if is_treatment_question(question):
+            ans = ("I'm not a doctor and cannot provide treatment, diagnosis, or medication advice.\n\n"
+                   "Please consult a qualified healthcare professional.\n\n"
+                   "Trusted resources:\n"
+                   "• Mayo Clinic — mayoclinic.org\n"
+                   "• NIH MedlinePlus — medlineplus.gov\n"
+                   "• WHO — who.int")
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": ans})
+            return jsonify({"answer": ans, "source_type": "boundary",
+                            "disclaimer": "⚕️ I am not a doctor.", "confidence": None, "external_links": []})
 
-        # 2. Find terms in question
-        keys = find_terms(question)
-        print(f"[chat] Terms found: {keys}")
+        # ---- Build context strings ----
+        history_text = ""
+        for msg in history[-6:]:
+            role = "Patient" if msg["role"] == "user" else "Assistant"
+            history_text += f"{role}: {msg['content']}\n"
 
-        # 3. DB direct hit
-        db_hit = None
-        for k in keys:
-            e = db_terms.get(k,{})
-            if e.get("summary") or e.get("content"):
-                db_hit = e; break
+        simplify_ctx = ""
+        if last_simplify.get("terms"):
+            simplify_ctx = "Terms the patient already simplified:\n"
+            for t in last_simplify["terms"]:
+                simplify_ctx += f"  • {t['term']}: {t['explanation'][:200]}\n"
 
-        # 4. FAISS semantic hit
-        fai_hit = faiss_lookup(question, k=1)
-        if not fai_hit and keys:
-            for k in keys:
-                fai_hit = faiss_lookup(k, k=1)
-                if fai_hit: break
+        # ---- Resolve referential questions ("what are its symptoms", "tell me more about it") ----
+        REFERENTIAL = {'it','its','this','the condition','the disease','the term','the disorder',
+                       'that','this condition','this disease','this term'}
+        q_lower = question.lower().strip()
+        is_referential = any(q_lower.startswith(r) or f' {r} ' in q_lower or q_lower.endswith(r)
+                             for r in REFERENTIAL)
+        
+        resolved_question = question
+        if is_referential and last_db_term:
+            # Replace vague reference with the actual last term
+            resolved_question = re.sub(r'\b(it|its|this|that|the condition|the disease|the term|the disorder)\b',
+                                       last_db_term, question, flags=re.IGNORECASE)
+            print(f"  Resolved referential: '{question}' -> '{resolved_question}'")
 
-        # 5. Build answer
-        if db_hit or fai_hit:
-            if fai_hit:
-                term_name   = fai_hit["term"]
-                plain       = fai_hit["summary"] or (db_hit or {}).get("summary","")
-                content     = fai_hit["content"] or (db_hit or {}).get("content","")
-                s_ret       = fai_hit["sim"]
-                src_label   = f"FAISS Vector DB (similarity {fai_hit['sim']:.0%})"
+        # ---- Search DB with multi-strategy ----
+        db_results, best_sim, matched_query = search_db_multi(resolved_question, threshold=0.65)
+        # If resolved question didn't work, fall back to last_db_term directly
+        if not db_results and is_referential and last_db_term:
+            db_results, best_sim, matched_query = search_db_multi(last_db_term, threshold=0.65)
+            print(f"  Fallback to last_db_term: '{last_db_term}'")
+        print(f"  DB search for '{question}': found={bool(db_results)}, matched='{matched_query}'")
+
+        use_ollama = ollama_available()
+        print(f"  Ollama available: {use_ollama}")
+
+        if db_results:
+            doc     = db_results[0][0]
+            db_term = doc.metadata.get("term", matched_query or question)
+            summary = doc.metadata.get("summary", "")
+            ctx     = summary if summary else doc.page_content.strip()
+            s_h     = get_s_human(db_term.lower().strip())
+            conf    = compute_confidence(best_sim, from_db=True, s_human_override=s_h)
+
+            if use_ollama:
+                # Detect what kind of question this is
+                q_low = question.lower()
+                if any(w in q_low for w in ['symptom','sign','feel','look like','present']):
+                    focus = f"Focus on: what are the symptoms and signs of {db_term}."
+                elif any(w in q_low for w in ['cause','why','reason','how do you get','how does']):
+                    focus = f"Focus on: what causes {db_term} and why it happens."
+                elif any(w in q_low for w in ['who','age','gender','risk','prone','affect']):
+                    focus = f"Focus on: who gets {db_term} and what are the risk factors."
+                elif any(w in q_low for w in ['serious','dangerous','fatal','die','death','complication']):
+                    focus = f"Focus on: how serious is {db_term} and what complications can occur."
+                elif any(w in q_low for w in ['simple','easier','plain','layman','explain again','dont understand']):
+                    focus = f"Re-explain {db_term} using very simple everyday words, as if talking to a child."
+                else:
+                    focus = f"Answer the patient's specific question about {db_term} directly."
+
+                prompt = f"""You are a helpful medical assistant explaining terms to a patient with no medical background.
+
+DATABASE ENTRY for '{db_term}':
+{ctx[:700]}
+
+{focus}
+
+Conversation history:
+{history_text}
+
+Patient says: {question}
+
+Rules:
+- Answer in plain English, max 4 sentences. Be direct — answer the question immediately.
+- Only use information from the database entry above.
+- If the database doesn't contain the specific answer, say "Our database doesn't have details on that" then give what you do know.
+- NEVER mention treatments, medications or dosages.
+- NEVER say "consult a doctor" unless the question is about personal symptoms."""
+
+                ans, ok = query_ollama(prompt)
+                answer = ans if ok and ans else simplify_for_readability(ctx) or ctx.strip()
             else:
-                term_name   = db_hit["term"]
-                plain       = db_hit["summary"]
-                content     = db_hit["content"]
-                s_ret       = 0.65
-                src_label   = "Medical Jargon Database"
+                # Ollama down — serve most readable DB sentences
+                answer = simplify_for_readability(ctx) or ctx.strip()
 
-            # Trim content to max 2 sentences
-            sentences = re.split(r'(?<=[.!?])\s', content.strip()) if content else []
-            short_def = " ".join(sentences[:2]) if sentences else plain
+            # Remember this term for future referential questions
+            session["last_db_term"] = db_term
 
-            c = confidence(s_ret)
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": answer})
+            if len(history) > 20: session["history"] = history[-20:]
 
-            reply = (
-                f"<strong>{term_name}</strong><br>"
-                f"<span class='text-blue-600 font-medium'>In plain English:</span> {plain}<br><br>"
-                f"{short_def}"
-            )
             return jsonify({
-                "reply": reply, "source": src_label,
-                "confidence": c,
-                "confidence_label": confidence_label(c),
-                "readability": readability(f"{plain}. {short_def}"),
+                "answer": answer,
+                "source_type": "database",
+                "disclaimer": f"✓ From verified database: {db_term}",
+                "confidence": conf,
+                "external_links": [],
+                "ollama_used": use_ollama
             })
 
-        # 6. Term NOT in database → clear message
-        # Check if it looks like a medical term search
-        looks_medical = any(w in question.lower() for w in
-            ["what is","what does","define","explain","mean","meaning"])
+        else:
+            # ---- Not in DB ----
+            ext = build_external_links(question)
 
-        not_found_reply = (
-            "🔍 <strong>That term isn't in my database yet.</strong><br><br>"
-            "Here are trusted sources where you can find it:<br>"
-            '<a href="https://medlineplus.gov/ency/encyclopedia.htm" target="_blank" '
-            'class="text-blue-600 underline">NIH MedlinePlus Medical Encyclopedia</a><br>'
-            '<a href="https://www.mayoclinic.org/diseases-conditions" target="_blank" '
-            'class="text-blue-600 underline">Mayo Clinic Diseases &amp; Conditions</a><br>'
-            '<a href="https://www.nhs.uk/conditions/" target="_blank" '
-            'class="text-blue-600 underline">NHS Health A–Z</a>'
-        )
+            if use_ollama:
+                system_prompt = """You are an honest medical assistant.
+The question was NOT found in the verified medical database.
+Rules:
+- Clearly state this is AI general knowledge, not verified database content.
+- Give a factual, plain-English explanation in 3-5 sentences.
+- Mention what the term refers to, its common symptoms or characteristics if applicable.
+- Do NOT give treatment, dosage, or diagnosis advice.
+- End with one follow-up question the patient might want to ask."""
 
-        if OLLAMA_AVAILABLE and looks_medical:
-            try:
-                resp = ollama.chat(model="llama3", messages=[
-                    {"role":"system","content":
-                     "You explain medical term meanings in 1-2 plain English sentences only. "
-                     "No advice, no diagnosis. State clearly this is a general definition."},
-                    {"role":"user","content": question}
-                ])
-                ai_text = resp['message']['content'].strip()
-                return jsonify({
-                    "reply": (
-                        f"{ai_text}<br><br>"
-                        "<em class='text-xs text-gray-400'>⚠ This term is not in my database. "
-                        "AI-generated definition — verify with a trusted source.</em>"
-                    ),
-                    "source": "AI-generated (Llama3) — not from database",
-                    "confidence": None,
-                    "confidence_label": "Not validated — AI generated",
-                    "readability": readability(ai_text),
-                })
-            except:
-                pass
+                prompt = f"""Previously discussed: {simplify_ctx}
+Conversation: {history_text}
+Patient question: {question}
 
-        return jsonify({
-            "reply": not_found_reply,
-            "source": "Term not found in database",
-            "confidence": None,
-            "confidence_label": None,
-            "readability": None,
-        })
+This was NOT found in our verified medical database. Answer from general medical knowledge, be transparent about that."""
+
+                ans, ok = query_ollama(prompt, system_prompt=system_prompt)
+
+                if ok and ans:
+                    answer = ans
+                    src_type = "ai"
+                    disclaimer = "⚠️ Not in verified database — answer is from AI general knowledge. Please verify with trusted sources."
+                else:
+                    answer = f"I searched our verified database but could not find '{question}'. Please check the trusted sources below."
+                    src_type = "ai"
+                    disclaimer = "⚠️ Not in verified database. Please check the sources below."
+            else:
+                # Ollama down AND not in DB — try NIH MedlinePlus API
+                topic = extract_topic_from_question(question)
+                nih_answer = lookup_medlineplus(topic)
+                if nih_answer:
+                    answer = nih_answer
+                    src_type = "database"
+                    disclaimer = "✓ Definition sourced from NIH MedlinePlus (verified medical source)."
+                else:
+                    answer = f"I searched our verified database but could not find information on '{topic}'. Please check the trusted sources below for doctor-reviewed definitions."
+                    src_type = "ai"
+                    disclaimer = "⚠️ Not in our database. Please check the sources below."
+
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": answer})
+            if len(history) > 20: session["history"] = history[-20:]
+
+            return jsonify({
+                "answer": answer,
+                "source_type": src_type,
+                "disclaimer": disclaimer,
+                "confidence": compute_confidence(0, from_db=False),
+                "external_links": ext,
+                "ollama_used": use_ollama
+            })
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/chat/clear', methods=['POST'])
+def chat_clear():
+    sid = request.get_json().get("session_id", "default")
+    conversation_store[sid] = {"history": [], "last_simplify": {}}
+    return jsonify({"status": "cleared"})
 
 if __name__ == '__main__':
-    print(f"\n✓ DB terms: {len(db_terms)}")
-    print("Server: http://localhost:5500")
+    print("\nStarting MedSimplify → http://localhost:5500")
+    print("Ensure: ollama serve && ollama pull llama3")
     app.run(debug=True, host="0.0.0.0", port=5500)

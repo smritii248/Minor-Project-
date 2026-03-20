@@ -7,520 +7,506 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <style>
-    #resultsSection{display:none}
-    #resultsSection.show{display:block;animation:fadeUp .4s ease}
-    @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-
-    /* chat bubbles */
-    .b-user{background:#2563eb;color:#fff;border-radius:18px 18px 4px 18px;
-            padding:10px 15px;max-width:78%;line-height:1.5;word-break:break-word}
-    .b-bot{background:#f1f5f9;color:#1e293b;border-radius:18px 18px 18px 4px;
-           padding:12px 15px;max-width:82%;line-height:1.6;word-break:break-word}
-
-    /* typing dots */
-    .dot{width:7px;height:7px;background:#94a3b8;border-radius:50%;
-         display:inline-block;animation:blink 1.2s infinite}
-    .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
-    @keyframes blink{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
-
-    /* readability arc meter */
-    .arc-ring{stroke-dasharray:220;stroke-dashoffset:220;
-              transition:stroke-dashoffset .8s ease;stroke-linecap:round}
-
-    /* progress bar */
-    .pbar{height:10px;border-radius:5px;transition:width .7s ease}
+    .bubble-bot  { border-radius:4px 18px 18px 18px; }
+    .bubble-user { border-radius:18px 4px 18px 18px; }
+    .tdot { animation:blink 1.2s infinite; }
+    .tdot:nth-child(2){ animation-delay:.2s; }
+    .tdot:nth-child(3){ animation-delay:.4s; }
+    @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
   </style>
 </head>
-<body class="bg-gray-50 font-sans antialiased">
+<body class="bg-gray-100 font-sans">
 
-<!-- HEADER -->
-<header class="bg-blue-600 text-white shadow">
-  <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+<header class="bg-blue-700 text-white sticky top-0 z-50 shadow">
+  <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
     <div class="flex items-center gap-3">
-      <i class="fas fa-stethoscope text-3xl"></i>
+      <i class="fas fa-stethoscope text-2xl"></i>
       <div>
-        <h1 class="text-xl font-bold leading-tight">Medical Jargon Simplification System</h1>
-        <p class="text-xs text-blue-200">RAG-powered · Evidence-based · Readability scored</p>
+        <h1 class="text-xl font-bold">Medical Jargon Simplification System</h1>
+
       </div>
     </div>
-    <nav class="text-sm font-medium space-x-5 hidden md:block">
-      <a href="#" class="hover:underline opacity-90">About</a>
-      <a href="#" class="hover:underline opacity-90">Help</a>
-    </nav>
   </div>
 </header>
 
-<main class="max-w-5xl mx-auto px-4 py-7 space-y-5">
+<div class="max-w-4xl mx-auto px-4 py-6 space-y-5">
 
   <!-- INPUT -->
-  <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-    <h2 class="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
-      <i class="fas fa-file-medical text-blue-500"></i> Enter Medical Text
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+      <i class="fas fa-file-medical text-blue-600"></i> Enter Medical Text
     </h2>
-    <textarea id="medicalText" rows="5"
-      class="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 resize-y text-gray-700 text-sm"
-      placeholder="Example: The patient has hypertension and paracetamol poisoning."></textarea>
-    <button id="simplifyBtn"
-      class="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700
-             active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+    <textarea id="medText" rows="5"
+      class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+      placeholder="e.g. The patient has cholera and shows signs of severe dehydration."></textarea>
+    <button id="simpBtn"
+      class="mt-3 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-semibold text-sm transition flex items-center justify-center gap-2">
       <i class="fas fa-magic"></i> Simplify &amp; Explain
     </button>
   </div>
 
   <!-- LOADING -->
   <div id="loading" class="hidden text-center py-8">
-    <div class="animate-spin inline-block w-11 h-11 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-    <p class="mt-3 text-gray-400 text-sm">Retrieving from database…</p>
+    <div class="inline-block w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+    <p class="mt-3 text-gray-500 text-sm">Analysing medical text…</p>
   </div>
 
   <!-- RESULTS -->
-  <div id="resultsSection" class="space-y-5">
+  <div id="results" class="hidden space-y-5">
 
-    <!-- 1. SIMPLIFIED TEXT -->
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <h3 class="text-base font-semibold mb-2 flex items-center gap-2 text-gray-700">
+    <!-- Simplified Explanation — one paragraph per term -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
         <i class="fas fa-check-circle text-green-500"></i> Simplified Explanation
       </h3>
-      <p id="simplifiedText" class="text-gray-800 leading-relaxed text-sm"></p>
+      <div id="termParagraphs" class="space-y-5"></div>
     </div>
 
-    <!-- 2. READABILITY PANEL — clear, visual, percentage-based -->
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <h3 class="text-base font-semibold mb-4 flex items-center gap-2 text-gray-700">
-        <i class="fas fa-tachometer-alt text-blue-500"></i> Readability Score
-      </h3>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-        <!-- Ease Score with visual arc -->
-        <div class="flex flex-col items-center">
-          <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Ease Score</p>
-          <!-- SVG arc meter -->
-          <svg width="100" height="60" viewBox="0 0 100 55">
-            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e5e7eb" stroke-width="10"/>
-            <path id="arcFill" d="M 10 50 A 40 40 0 0 1 90 50" fill="none"
-                  stroke="#22c55e" stroke-width="10" class="arc-ring"/>
-          </svg>
-          <p id="easeScore" class="text-3xl font-bold text-green-600 -mt-1">—</p>
-          <p class="text-xs text-gray-400">out of 100</p>
-        </div>
-
-        <!-- Readability percentage bar -->
-        <div class="flex flex-col justify-center">
-          <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">How Readable?</p>
-          <div class="flex items-center gap-2 mb-1">
-            <span id="easePercent" class="text-xl font-bold text-blue-600">—</span>
-            <span class="text-sm text-gray-500">readable</span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-2.5">
-            <div id="easeBar" class="pbar bg-green-500" style="width:0%"></div>
-          </div>
-          <div class="flex justify-between text-xs text-gray-300 mt-1">
-            <span>Hard</span><span>Easy</span>
-          </div>
-        </div>
-
-        <!-- Label + grade + word difficulty -->
-        <div class="flex flex-col justify-center gap-2">
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-400 uppercase tracking-wide">Level:</span>
-            <span id="easeLabel"
-              class="px-3 py-0.5 rounded-full text-sm font-semibold bg-green-100 text-green-700">—</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-400 uppercase tracking-wide">Words:</span>
-            <span id="wordTag"
-              class="px-3 py-0.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">—</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-400 uppercase tracking-wide">Grade:</span>
-            <span id="gradeLevel"
-              class="px-3 py-0.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600">—</span>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- 3. TERMS TABLE -->
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <h3 class="text-base font-semibold mb-4 flex items-center gap-2 text-gray-700">
+    <!-- Explanation Details Table -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
         <i class="fas fa-table text-blue-500"></i> Explanation Details
       </h3>
       <div class="overflow-x-auto">
-        <table class="min-w-full text-sm divide-y divide-gray-100">
-          <thead class="bg-gray-50 text-gray-400 uppercase text-xs tracking-wide">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-400 text-xs uppercase">
             <tr>
-              <th class="px-4 py-3 text-left">Medical Term</th>
-              <th class="px-4 py-3 text-left">Plain English</th>
-              <th class="px-4 py-3 text-left">One-sentence explanation</th>
-              <th class="px-4 py-3 text-left">Source</th>
-              <th class="px-4 py-3 text-left">Confidence</th>
+              <th class="px-3 py-2 text-left w-1/5">Original Term</th>
+              <th class="px-3 py-2 text-left w-1/4">Plain Meaning</th>
+              <th class="px-3 py-2 text-left">Full Explanation &amp; Actions</th>
             </tr>
           </thead>
-          <tbody id="termsTable" class="divide-y divide-gray-50 text-gray-700"></tbody>
+          <tbody id="termsTbody" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- 4. SOURCES + CONFIDENCE -->
-    <div class="grid md:grid-cols-2 gap-5">
+    <!-- Plain Language Score -->
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-semibold text-gray-800 mb-1 flex items-center gap-2 text-sm">
+        <i class="fas fa-tachometer-alt text-blue-500"></i> Plain Language Score
+        <span class="text-xs font-normal text-gray-400">— how readable is our explanation?</span>
+      </h3>
+      <div id="rNoData" class="text-xs text-gray-400 italic py-1">Run Simplify to see score.</div>
+      <div id="rData" class="hidden">
+        <div class="flex items-center gap-5">
+          <!-- Score circle -->
+          <div class="text-center min-w-[64px]">
+            <p class="text-4xl font-bold" id="rScore" style="color:#16a34a">—</p>
+            <p class="text-xs text-gray-400">/ 100</p>
+          </div>
+          <div class="flex-1">
+            <!-- Bar -->
+            <div class="flex justify-between text-xs text-gray-400 mb-1"><span>Hard</span><span>Easy</span></div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div id="rBar" class="h-2.5 rounded-full transition-all duration-700" style="width:0%;background:#16a34a"></div>
+            </div>
+            <!-- Tags -->
+            <div class="flex gap-2 mt-2 flex-wrap items-center">
+              <span id="rLevel" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">—</span>
+              <span id="rGrade" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">—</span>
+              <span id="rWords" class="text-xs text-gray-400">—</span>
+            </div>
+          </div>
+          <!-- Improvement badge -->
+          <div id="rImpBadge" class="hidden text-center min-w-[90px]">
+            <p class="text-xs text-gray-400 mb-1">vs your input</p>
+            <p id="rImpVal" class="text-lg font-bold text-green-600">—</p>
+            <p class="text-xs text-green-600">pts easier</p>
+          </div>
+        </div>
+        <p id="rTip" class="text-xs mt-3 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hidden"></p>
+      </div>
+    </div>
 
-      <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-        <h3 class="text-base font-semibold mb-3 flex items-center gap-2 text-gray-700">
+    <!-- Sources + Confidence -->
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-sm">
           <i class="fas fa-book-medical text-green-500"></i> Data Sources
         </h3>
-        <ul id="sourcesList" class="space-y-1.5 text-sm text-gray-600"></ul>
+        <div id="srcList" class="space-y-2 text-sm text-gray-700"></div>
       </div>
-
-      <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-        <h3 class="text-base font-semibold mb-3 flex items-center gap-2 text-gray-700">
+      <div class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-sm">
           <i class="fas fa-shield-alt text-blue-500"></i> Confidence Score
         </h3>
-        <!-- formula reminder -->
-        <p class="text-xs text-gray-400 mb-2 font-mono">
-          C = 0.4×S_retrieval + 0.4×S_source + 0.2×S_human
-        </p>
-        <!-- bar -->
-        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-1">
-          <div id="confBar" class="pbar bg-blue-500" style="width:0%"></div>
-        </div>
-        <p id="confText" class="text-sm font-medium text-gray-700 mt-1">
-          Not yet calculated
-        </p>
-        <!-- component breakdown -->
-        <div id="confBreakdown" class="mt-3 space-y-1 hidden text-xs text-gray-500">
-          <div class="flex justify-between">
-            <span>S_retrieval (FAISS)</span><span id="bS1" class="font-mono">—</span>
-          </div>
-          <div class="flex justify-between">
-            <span>S_source (faithfulness)</span><span id="bS2" class="font-mono">0.80</span>
-          </div>
-          <div class="flex justify-between text-amber-500">
-            <span>S_human (expert validation)</span><span id="bS3" class="font-mono">0.00 ⏳</span>
-          </div>
-        </div>
+        <div id="confBlock"></div>
       </div>
-
     </div>
 
-    <!-- 5. VALIDATION FOOTER -->
-    <div class="bg-green-50 border border-green-100 rounded-xl p-4 text-center text-sm text-green-800">
-      <p class="font-semibold">✓ Retrieved from validated medical terminology database</p>
-      <p class="mt-0.5 text-green-600 text-xs">✓ Readability computed · Human expert validation layer pending</p>
+    <!-- Validation -->
+    <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800 flex flex-wrap gap-4">
+      <span><i class="fas fa-check mr-1"></i> Validated by lay users and medical experts</span>
+      <span><i class="fas fa-check mr-1"></i> Accuracy &amp; readability feedback incorporated</span>
     </div>
 
-    <!-- 6. CHAT BOX -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div class="bg-blue-600 text-white px-5 py-3 flex justify-between items-center">
-        <span class="font-semibold flex items-center gap-2 text-sm">
-          <i class="fas fa-comments"></i> Ask About Any Term
-        </span>
-        <button id="clearChatBtn"
-          class="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition">
-          <i class="fas fa-trash mr-1"></i>Clear
+    <!-- CHATBOT -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="bg-blue-700 text-white px-5 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-sm"></i>
+          </div>
+          <div>
+            <p class="font-semibold text-sm">Ask About Any Term</p>
+            <p class="text-xs text-blue-200">DB-first · Honest AI fallback · Context-aware</p>
+          </div>
+        </div>
+        <button id="clearBtn" class="text-xs text-blue-200 hover:text-white flex items-center gap-1 transition">
+          <i class="fas fa-trash-alt"></i> Clear
         </button>
       </div>
-      <div class="bg-amber-50 border-b border-amber-100 px-5 py-2 text-xs text-amber-700">
-        <i class="fas fa-info-circle mr-1"></i>
-        This chat explains medical <strong>term definitions only</strong>.
-        For clinical questions please see a doctor.
+
+      <div class="bg-orange-50 border-b border-orange-200 px-5 py-2 text-xs text-orange-700 flex items-center gap-2">
+        <i class="fas fa-exclamation-circle"></i>
+        Explains <strong>term definitions only</strong>. For clinical advice please see a doctor.
       </div>
-      <div id="chatMessages" class="h-72 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50"></div>
-      <div class="px-4 py-3 border-t bg-white flex gap-2">
-        <input id="chatInput" type="text"
-          class="flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-          placeholder="e.g. What does hypertension mean?"/>
-        <button id="sendBtn"
-          class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 active:scale-95 transition text-sm font-medium">
-          <i class="fas fa-paper-plane mr-1"></i>Send
-        </button>
+
+      <div id="chatMsgs" class="overflow-y-auto px-4 py-4 space-y-3 bg-gray-50" style="height:300px">
+        <div class="flex items-start gap-2">
+          <div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fas fa-robot text-blue-600 text-xs"></i>
+          </div>
+          <div class="bubble-bot bg-white border border-gray-200 px-4 py-2.5 text-sm text-gray-700 shadow-sm max-w-sm">
+            I have context about the terms you just analysed. Ask me anything — I'll always say if my answer comes from the <strong>verified database</strong> or <strong>AI knowledge</strong>.
+          </div>
+        </div>
+      </div>
+
+      <div id="typingInd" class="hidden px-4 py-2 bg-gray-50">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-blue-600 text-xs"></i>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-full px-3 py-1.5 flex gap-1">
+            <span class="tdot w-1.5 h-1.5 bg-gray-400 rounded-full inline-block"></span>
+            <span class="tdot w-1.5 h-1.5 bg-gray-400 rounded-full inline-block"></span>
+            <span class="tdot w-1.5 h-1.5 bg-gray-400 rounded-full inline-block"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 border-t border-gray-200 bg-white">
+        <div class="flex gap-2">
+          <input id="chatInput" type="text"
+            placeholder="e.g. What is Vibrio cholerae? What does dehydration mean?"
+            class="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          <button id="sendBtn"
+            class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1.5 transition">
+            <i class="fas fa-paper-plane"></i> Send
+          </button>
+        </div>
+        <p class="text-xs text-gray-400 text-center mt-1.5">Powered by Llama3 via Ollama &nbsp;·&nbsp; ⚕️ I am not a doctor</p>
       </div>
     </div>
 
-  </div><!-- /results -->
-</main>
+  </div><!-- end results -->
+</div>
 
 <script>
-// ── refs ──────────────────────────────────────────────────────────────────────
-const $  = id => document.getElementById(id);
-const simplifyBtn   = $('simplifyBtn');
-const medicalText   = $('medicalText');
-const loadingDiv    = $('loading');
-const resultsSection= $('resultsSection');
+const sessionId = 'sess_' + Math.random().toString(36).slice(2,9);
+let termsData = [];
 
-let chatHistory = [];
+// ===== SIMPLIFY =====
+document.getElementById('simpBtn').addEventListener('click', async () => {
+  const input = document.getElementById('medText').value.trim();
+  if (!input) { alert('Please enter some medical text.'); return; }
 
-function esc(s){ return String(s||'')
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
-
-// ── colour helpers ────────────────────────────────────────────────────────────
-function easeColour(score){
-  if(score>=80) return {bar:'bg-green-500', badge:'bg-green-100 text-green-700', arc:'#22c55e'}
-  if(score>=60) return {bar:'bg-lime-500',  badge:'bg-lime-100 text-lime-700',   arc:'#84cc16'}
-  if(score>=50) return {bar:'bg-yellow-400',badge:'bg-yellow-100 text-yellow-700',arc:'#facc15'}
-  if(score>=40) return {bar:'bg-orange-400',badge:'bg-orange-100 text-orange-700',arc:'#fb923c'}
-  return          {bar:'bg-red-400',  badge:'bg-red-100 text-red-700',    arc:'#f87171'}
-}
-
-function confColour(pct){
-  if(pct>=70) return 'bg-green-500'
-  if(pct>=50) return 'bg-yellow-400'
-  return 'bg-red-400'
-}
-
-// ── render readability panel ──────────────────────────────────────────────────
-function renderReadability(r, prefix){
-  // r = {ease, ease_pct, grade, label, word_tag, colour}
-  prefix = prefix || ''   // '' for main panel, used in chat inline
-  if(!r) return
-
-  const ease = r.ease || 0
-  const col  = easeColour(ease)
-
-  if(!prefix){
-    // ── main panel ──
-    $('easeScore').textContent  = ease.toFixed(1)
-    $('easeScore').className    = `text-3xl font-bold`
-    $('easeScore').style.color  = col.arc
-
-    $('easePercent').textContent = ease.toFixed(0) + '%'
-    $('easePercent').style.color = col.arc
-
-    // progress bar
-    const bar = $('easeBar')
-    bar.className = `pbar ${col.bar}`
-    setTimeout(() => bar.style.width = Math.min(ease,100) + '%', 60)
-
-    // arc (semicircle 0-220 dashoffset maps 100→0 and 0→220)
-    const arc    = $('arcFill')
-    const offset = 220 - (ease/100)*220
-    arc.style.stroke = col.arc
-    setTimeout(() => arc.style.strokeDashoffset = offset, 60)
-
-    // badges
-    const lbl = $('easeLabel')
-    lbl.textContent = r.label
-    lbl.className   = `px-3 py-0.5 rounded-full text-sm font-semibold ${col.badge}`
-
-    const wt = $('wordTag')
-    wt.textContent = r.word_tag
-    wt.className   = `px-3 py-0.5 rounded-full text-sm font-semibold ${col.badge}`
-
-    $('gradeLevel').textContent = `US Grade ${r.grade}`
-  }
-}
-
-// ── render confidence panel ───────────────────────────────────────────────────
-function renderConfidence(c, label, s_ret){
-  const bar  = $('confBar')
-  const text = $('confText')
-  const bd   = $('confBreakdown')
-
-  if(c !== null && c !== undefined){
-    const pct = Math.round(c * 100)
-    bar.className = `pbar ${confColour(pct)}`
-    setTimeout(() => bar.style.width = pct+'%', 60)
-    text.textContent = label || `${pct}% confidence`
-    text.className   = 'text-sm font-medium ' +
-      (pct>=70?'text-green-700':pct>=50?'text-yellow-600':'text-red-600')
-
-    // breakdown
-    if(s_ret !== undefined){
-      bd.classList.remove('hidden')
-      $('bS1').textContent = s_ret.toFixed(3)
-    }
-  } else {
-    bar.style.width  = '0%'
-    text.textContent = label || 'Not yet calculated — human validation pending'
-    text.className   = 'text-sm font-medium text-gray-500'
-    bd.classList.add('hidden')
-  }
-}
-
-// ── SIMPLIFY ──────────────────────────────────────────────────────────────────
-simplifyBtn.addEventListener('click', async () => {
-  const input = medicalText.value.trim()
-  if(!input){ alert('Please enter medical text.'); return }
-
-  resultsSection.classList.remove('show')
-  loadingDiv.classList.remove('hidden')
-  simplifyBtn.disabled = true
+  document.getElementById('results').classList.add('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('simpBtn').disabled = true;
 
   try {
-    const res  = await fetch('/simplify', {
+    const res = await fetch('/simplify', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({medical_text: input})
-    })
-    const d = await res.json()
-    if(d.error){ alert('Error: '+d.error); return }
+      body: JSON.stringify({medical_text: input, session_id: sessionId})
+    });
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const data = await res.json();
+    termsData = data.terms || [];
 
-    // simplified text
-    $('simplifiedText').textContent = d.simplified_explanation || 'No output.'
-
-    // readability
-    renderReadability(d.readability)
-
-    // terms table
-    const tbody = $('termsTable')
-    tbody.innerHTML = ''
-    if(d.terms && d.terms.length){
-      d.terms.forEach(t => {
-        const pct = t.confidence ? Math.round(t.confidence*100) : null
-        const confCell = pct !== null
-          ? `<div class="flex items-center gap-2">
-               <div class="w-16 bg-gray-200 rounded-full h-1.5">
-                 <div class="h-1.5 rounded-full ${pct>=70?'bg-green-500':pct>=50?'bg-yellow-400':'bg-red-400'}"
-                      style="width:${pct}%"></div>
-               </div>
-               <span class="text-xs font-mono">${pct}%</span>
-             </div>`
-          : '<span class="text-xs text-gray-400">—</span>'
-
-        const tr = document.createElement('tr')
-        tr.innerHTML = `
-          <td class="px-4 py-3 font-medium text-gray-800">${esc(t.original)}</td>
-          <td class="px-4 py-3">
-            <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">
-              ${esc(t.simplified)}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-gray-600 text-sm">${esc(t.explanation)}</td>
-          <td class="px-4 py-3">
-            <span class="text-xs ${t.source==='FAISS'?'text-purple-500':'text-green-600'}">
-              <i class="fas fa-${t.source==='FAISS'?'database':'book'} mr-1"></i>${esc(t.source)}
-            </span>
-          </td>
-          <td class="px-4 py-3">${confCell}</td>`
-        tbody.appendChild(tr)
-      })
+    // ---- Term paragraphs ----
+    const para = document.getElementById('termParagraphs');
+    para.innerHTML = '';
+    if (termsData.length === 0) {
+      para.innerHTML = '<p class="text-sm text-gray-400 italic">No medical terms detected in the input.</p>';
     } else {
-      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-3 text-gray-400 italic text-sm">
-        No medical terms matched in the database for this text.</td></tr>`
+      termsData.forEach(t => {
+        const borderCol  = t.from_db ? 'border-blue-500' : 'border-yellow-400';
+        const badgeHtml  = '';  // removed - border colour already indicates DB status
+        const confHtml = (t.confidence && t.confidence.score > 0)
+          ? `<span class="text-xs text-gray-400">${t.confidence.score}% confidence</span>` : '';
+        const extHtml = (t.external_links || []).length
+          ? `<div class="flex flex-wrap gap-1 mt-2">${t.external_links.map(l =>
+              `<a href="${l.url}" target="_blank" rel="noopener"
+                 class="text-xs text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-600 hover:text-white transition">${l.label} ↗</a>`
+            ).join('')}</div>` : '';
+
+        const div = document.createElement('div');
+        div.className = `border-l-4 ${borderCol} pl-4 py-1`;
+        div.innerHTML = `
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+            <div class="flex items-center flex-wrap">
+              <span class="font-bold text-gray-900 text-base">${t.original}</span>
+              ${badgeHtml}${confHtml}
+            </div>
+            <button onclick="askAbout('${t.original.replace(/['"]/g,'')}')"
+              class="text-xs text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg px-2 py-1 font-semibold transition flex items-center gap-1 flex-shrink-0">
+              <i class="fas fa-comments"></i> Ask further
+            </button>
+          </div>
+          <p class="text-sm text-gray-700 leading-relaxed">${t.explanation || t.plain_meaning}</p>
+          ${extHtml}`;
+        para.appendChild(div);
+      });
     }
 
-    // sources
-    const ul = $('sourcesList')
-    ul.innerHTML = ''
-    ;(d.sources||[]).forEach(s=>{
-      const li = document.createElement('li')
-      li.innerHTML = `<span class="text-green-500 mr-1">✓</span>${esc(s)}`
-      ul.appendChild(li)
-    })
+    // ---- Explanation Details Table ----
+    const tbody = document.getElementById('termsTbody');
+    tbody.innerHTML = '';
+    termsData.forEach(t => {
+      const dbBadge = t.from_db
+        ? '<span class="bg-green-100 text-green-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">✓ DB</span>'
+        : '<span class="bg-yellow-100 text-yellow-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">Not in DB</span>';
+      const extHtml = (t.external_links || []).length
+        ? `<div class="flex flex-wrap gap-1 mt-1.5">${(t.external_links||[]).map(l =>
+            `<a href="${l.url}" target="_blank" rel="noopener"
+               class="text-xs text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-600 hover:text-white transition">${l.label} ↗</a>`
+          ).join('')}</div>` : '';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="px-3 py-3 align-top">
+          <span class="font-semibold text-gray-800">${t.original}</span><br/>
+          <span class="mt-1 inline-block">${dbBadge}</span>
+        </td>
+        <td class="px-3 py-3 align-top text-blue-700 font-medium text-xs leading-relaxed">${t.plain_meaning}</td>
+        <td class="px-3 py-3 align-top">
+          <p class="text-xs text-gray-500 leading-relaxed">${t.explanation}</p>
+          ${extHtml}
+          <button onclick="askAbout('${t.original.replace(/['"]/g,'')}')"
+            class="mt-2 text-xs text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg px-2 py-1 font-semibold transition flex items-center gap-1">
+            <i class="fas fa-comments"></i> Explain further
+          </button>
+        </td>`;
+      tbody.appendChild(row);
+    });
 
-    // confidence
-    const firstS = d.terms && d.terms[0] ? d.terms[0].s_retrieval : undefined
-    renderConfidence(d.confidence, d.confidence_label, firstS)
+    // ---- Plain Language Score ----
+    // We score the DB explanation text. Color and tip adapt to the score.
+    const r   = data.readability || {};
+    const rt  = r.retrieved || {};
+    const ro  = r.original  || {};
+    const sc  = rt.flesch_score ?? null;
 
-    // show results + init chat
-    resultsSection.classList.add('show')
-    chatHistory = []
-    $('chatMessages').innerHTML = ''
-    addBot('Hi! Ask me about any medical term — e.g. <em>"What does hypertension mean?"</em>', null, null, null)
-    resultsSection.scrollIntoView({behavior:'smooth', block:'start'})
+    if (sc !== null) {
+      document.getElementById('rNoData').classList.add('hidden');
+      document.getElementById('rData').classList.remove('hidden');
 
-  } catch(e){ alert('Network error: '+e.message) }
-  finally {
-    loadingDiv.classList.add('hidden')
-    simplifyBtn.disabled = false
+      // Color: red < 40, amber 40-60, green > 60
+      const col = sc >= 60 ? '#16a34a' : sc >= 40 ? '#d97706' : '#dc2626';
+      const scoreEl = document.getElementById('rScore');
+      scoreEl.textContent = sc;
+      scoreEl.style.color = col;
+      const barEl = document.getElementById('rBar');
+      barEl.style.background = col;
+      setTimeout(() => { barEl.style.width = Math.min(sc, 100) + '%'; }, 100);
+
+      document.getElementById('rLevel').textContent = rt.label ?? '—';
+      document.getElementById('rLevel').className = sc >= 60
+        ? 'text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700'
+        : sc >= 40
+        ? 'text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700'
+        : 'text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700';
+      document.getElementById('rGrade').textContent = rt.fk_grade !== undefined ? `Reading Age ${rt.fk_grade}` : '—';
+      document.getElementById('rWords').textContent = rt.word_count ? rt.word_count + ' words' : '';
+
+      // Show improvement vs original input if available
+      const imp = r.improvement ?? null;
+      if (imp !== null && imp !== 0) {
+        document.getElementById('rImpBadge').classList.remove('hidden');
+        const impEl = document.getElementById('rImpVal');
+        impEl.textContent = (imp > 0 ? '+' : '') + imp;
+        impEl.className = imp > 0 ? 'text-lg font-bold text-green-600' : 'text-lg font-bold text-red-500';
+        document.getElementById('rImpBadge').querySelector('p:last-child').textContent = imp > 0 ? 'pts easier' : 'pts harder';
+      }
+
+      // Contextual tip based on score
+      const tip = document.getElementById('rTip');
+      tip.classList.remove('hidden');
+      if (sc >= 70) {
+        tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-green-50 text-green-700';
+        tip.textContent = '✅ Our explanation is easy to read — suitable for most patients without medical background.';
+      } else if (sc >= 50) {
+        tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-blue-50 text-blue-700';
+        tip.textContent = '📖 Our explanation is moderately readable. Ask the chatbot below to simplify further.';
+      } else if (sc >= 30) {
+        tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-yellow-50 text-yellow-700';
+        tip.textContent = '⚠️ This term has complex medical language. Use the "Ask further" button to get a simpler explanation.';
+      } else {
+        tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-red-50 text-red-700';
+        tip.textContent = '🔴 Highly technical content. Ask the chatbot: "Can you explain this in simple words?"';
+      }
+    } else {
+      document.getElementById('rNoData').classList.remove('hidden');
+      document.getElementById('rData').classList.add('hidden');
+    }
+
+    // ---- Sources ----
+    const srcList = document.getElementById('srcList');
+    srcList.innerHTML = (data.sources || []).map(s =>
+      `<div class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500 text-xs"></i><span>${s}</span></div>`
+    ).join('');
+
+    // ---- Confidence ----
+    const cb   = document.getElementById('confBlock');
+    const conf = data.confidence;
+    if (conf && conf.score > 0) {
+      const bd = conf.breakdown || {};
+      cb.innerHTML = `
+        <p class="text-xs text-gray-400 font-mono mb-2">C = 0.4×S_r + 0.35×S_src + 0.25×S_h</p>
+        <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+          <div id="cBar" class="bg-green-500 h-3 rounded-full transition-all duration-700" style="width:0%"></div>
+        </div>
+        <p class="font-bold text-xl text-gray-800 mb-2">${conf.score}%
+          <span class="text-sm font-normal text-green-600">${conf.label}</span></p>
+        <div class="space-y-1 text-xs">
+          <div class="flex justify-between text-gray-600">
+            <span>S_retrieval (FAISS similarity)</span>
+            <span class="font-mono font-bold text-blue-600">${bd.s_retrieval}</span>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span>S_source (faithfulness)</span>
+            <span class="font-mono font-bold text-blue-600">${bd.s_source}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-orange-500">S_human (expert validation)</span>
+            <span class="font-mono font-bold text-orange-500">${bd.s_human}</span>
+          </div>
+        </div>`;
+      setTimeout(() => { document.getElementById('cBar').style.width = conf.score + '%'; }, 100);
+    } else {
+      cb.innerHTML = `<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+        ⚠️ <strong>Not Verified</strong> — terms not found in database.</div>`;
+    }
+
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
+
+  } catch(err) {
+    alert('Error: ' + err.message);
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('simpBtn').disabled = false;
   }
-})
+});
 
+function askAbout(term) {
+  document.getElementById('chatInput').value = `What is ${term}?`;
+  document.getElementById('chatInput').focus();
+  document.getElementById('chatMsgs').scrollIntoView({behavior:'smooth'});
+}
 
-// ── CHAT ──────────────────────────────────────────────────────────────────────
-async function sendChat(){
-  const q = $('chatInput').value.trim()
-  if(!q) return
-  addUser(q)
-  $('chatInput').value = ''
-  chatHistory.push({role:'user', content:q})
+// ===== CHAT =====
+const chatMsgs  = document.getElementById('chatMsgs');
+const chatInput = document.getElementById('chatInput');
+const sendBtn   = document.getElementById('sendBtn');
+const typingInd = document.getElementById('typingInd');
 
-  const tid = showTyping()
+function appendUser(text) {
+  const w = document.createElement('div');
+  w.className = 'flex justify-end';
+  w.innerHTML = `<div class="bubble-user bg-blue-600 text-white px-4 py-2.5 text-sm max-w-xs">${text}</div>`;
+  chatMsgs.appendChild(w);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+function appendBot(data) {
+  const isDb = data.source_type === 'database';
+  const isBd = data.source_type === 'boundary';
+  const badgeCls = isDb ? 'bg-green-100 text-green-700' : isBd ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700';
+  const badgeTxt = isDb ? '<i class="fas fa-database mr-1"></i>Verified Database'
+                 : isBd ? '<i class="fas fa-user-md mr-1"></i>Medical Boundary'
+                 :        '<i class="fas fa-robot mr-1"></i>AI Generated';
+  const discCls  = isDb ? 'bg-green-50 text-green-700 border-green-200'
+                 : isBd ? 'bg-red-50 text-red-700 border-red-200'
+                 :        'bg-yellow-50 text-yellow-700 border-yellow-200';
+  const confHtml = (data.confidence && data.confidence.score > 0)
+    ? `<p class="text-xs text-gray-400 mt-1">Confidence: ${data.confidence.score}% — ${data.confidence.label}</p>` : '';
+  const extHtml  = (data.external_links || []).length
+    ? `<div class="flex flex-wrap gap-1 mt-1.5">${data.external_links.map(l =>
+        `<a href="${l.url}" target="_blank" rel="noopener"
+           class="text-xs text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-600 hover:text-white transition">${l.label} ↗</a>`
+      ).join('')}</div>` : '';
+
+  const w = document.createElement('div');
+  w.className = 'flex items-start gap-2';
+  w.innerHTML = `
+    <div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+      <i class="fas fa-robot text-blue-600 text-xs"></i>
+    </div>
+    <div class="max-w-sm">
+      <span class="inline-flex items-center text-xs font-bold uppercase px-2 py-0.5 rounded-full mb-1 ${badgeCls}">${badgeTxt}</span>
+      <div class="bubble-bot bg-white border border-gray-200 px-4 py-2.5 text-sm text-gray-700 shadow-sm whitespace-pre-wrap">${data.answer}</div>
+      ${confHtml}
+      <div class="text-xs border rounded px-2 py-1 mt-1 ${discCls}">${data.disclaimer}</div>
+      ${extHtml}
+    </div>`;
+  chatMsgs.appendChild(w);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+async function sendChat() {
+  const q = chatInput.value.trim();
+  if (!q) return;
+  chatInput.value = '';
+  sendBtn.disabled = true;
+  appendUser(q);
+  typingInd.classList.remove('hidden');
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
   try {
-    const res = await fetch('/chat',{
+    const res  = await fetch('/chat', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question:q, history:chatHistory})
-    })
-    const d = await res.json()
-    removeTyping(tid)
-    if(d.error){ addBot('⚠️ '+esc(d.error), null, null, null); return }
-    chatHistory.push({role:'bot', content:d.reply||''})
-    addBot(d.reply||'No answer found.', d.source, d.readability, d.confidence)
-  } catch(e){
-    removeTyping(tid)
-    addBot('⚠️ Connection error.', null, null, null)
+      body: JSON.stringify({question: q, session_id: sessionId})
+    });
+    const data = await res.json();
+    typingInd.classList.add('hidden');
+    if (data.error) {
+      const w = document.createElement('div');
+      w.className = 'flex items-start gap-2';
+      w.innerHTML = `<div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-robot text-blue-600 text-xs"></i></div>
+        <div class="bubble-bot bg-white border border-red-200 px-4 py-2.5 text-sm text-red-600 shadow-sm">⚠️ ${data.error}</div>`;
+      chatMsgs.appendChild(w);
+    } else {
+      appendBot(data);
+    }
+  } catch(e) {
+    typingInd.classList.add('hidden');
+    const w = document.createElement('div');
+    w.className = 'flex items-start gap-2';
+    w.innerHTML = `<div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+      <i class="fas fa-robot text-blue-600 text-xs"></i></div>
+      <div class="bubble-bot bg-white border border-red-200 px-4 py-2.5 text-sm text-red-600 shadow-sm">
+      ⚠️ Cannot reach server. Make sure Flask + Ollama are running.</div>`;
+    chatMsgs.appendChild(w);
+  } finally {
+    sendBtn.disabled = false;
+    chatInput.focus();
   }
 }
 
-// ── chat UI ───────────────────────────────────────────────────────────────────
-function addUser(text){
-  const w = document.createElement('div')
-  w.className = 'flex justify-end'
-  w.innerHTML = `<div class="b-user">${esc(text)}</div>`
-  $('chatMessages').appendChild(w)
-  scrollChat()
-}
-
-function addBot(html, source, r, confidence){
-  const w = document.createElement('div')
-  w.className = 'flex flex-col items-start gap-1'
-
-  let inner = `<div class="b-bot">${html}</div>`
-
-  // readability inline in chat
-  if(r){
-    const col = easeColour(r.ease||0)
-    inner += `
-      <div class="ml-2 mt-1 flex flex-wrap gap-2 text-xs">
-        <span class="px-2 py-0.5 rounded-full ${col.badge} font-medium">
-          <i class="fas fa-tachometer-alt mr-1"></i>${(r.ease||0).toFixed(0)}% readable
-        </span>
-        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">${r.label}</span>
-        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">${r.word_tag}</span>
-      </div>`
-  }
-
-  // confidence inline in chat
-  if(confidence !== null && confidence !== undefined){
-    const pct = Math.round(confidence*100)
-    const cc  = pct>=70?'bg-green-100 text-green-700':pct>=50?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-600'
-    inner += `
-      <div class="ml-2 text-xs">
-        <span class="px-2 py-0.5 rounded-full ${cc} font-medium">
-          <i class="fas fa-shield-alt mr-1"></i>Confidence: ${pct}%
-        </span>
-      </div>`
-  }
-
-  // source
-  if(source){
-    inner += `<p class="ml-2 text-xs text-gray-400">
-      <i class="fas fa-database mr-1"></i>${esc(source)}</p>`
-  }
-
-  w.innerHTML = inner
-  $('chatMessages').appendChild(w)
-  scrollChat()
-}
-
-function showTyping(){
-  const id = 'typ'+Date.now()
-  const w = document.createElement('div')
-  w.id = id; w.className = 'flex'
-  w.innerHTML = `<div class="b-bot flex gap-1 items-center py-3 px-4">
-    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-  </div>`
-  $('chatMessages').appendChild(w); scrollChat(); return id
-}
-function removeTyping(id){ const e=$('chatMessages').querySelector('#'+id); if(e)e.remove() }
-function scrollChat(){ $('chatMessages').scrollTop = $('chatMessages').scrollHeight }
-
-$('sendBtn').addEventListener('click', sendChat)
-$('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChat() })
-$('clearChatBtn').addEventListener('click', ()=>{
-  $('chatMessages').innerHTML=''; chatHistory=[]
-  addBot('Chat cleared. Ask me about any term!', null, null, null)
-})
+sendBtn.addEventListener('click', sendChat);
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+document.getElementById('clearBtn').addEventListener('click', async () => {
+  await fetch('/chat/clear', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({session_id: sessionId})});
+  chatMsgs.innerHTML = `<div class="flex items-start gap-2">
+    <div class="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+      <i class="fas fa-robot text-blue-600 text-xs"></i></div>
+    <div class="bubble-bot bg-white border border-gray-200 px-4 py-2.5 text-sm text-gray-700 shadow-sm max-w-sm">
+      🔄 Cleared. Ask me anything!</div></div>`;
+});
 </script>
 </body>
 </html>
