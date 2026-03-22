@@ -1,1 +1,1 @@
-t5_finetuned/
+echo "t5_finetuned/model.safetensors" > .gitignore
