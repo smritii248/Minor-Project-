@@ -1,4 +1,4 @@
-# Minor-Project-
+# Minor-Project
 
 # Medical Jargon Simplification System
  
