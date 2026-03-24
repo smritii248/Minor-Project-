@@ -6,7 +6,7 @@ import re, sqlite3, traceback
 import pandas as pd
 import requests
 
-# T5 imports — for plain language simplification
+# T5 imports 
 try:
     from transformers import T5ForConditionalGeneration, T5Tokenizer
     import torch
