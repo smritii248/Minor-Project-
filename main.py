@@ -78,7 +78,7 @@ def is_treatment_question(text):
     t = text.lower()
     return any(kw in t for kw in TREATMENT_KEYWORDS)
 
-# ---- Readability ----
+# Readability 
 def count_syllables(word):
     word = word.lower().strip(".,!?;:")
     if len(word) <= 3: return 1
@@ -92,13 +92,40 @@ def count_syllables(word):
     return max(1, count)
 
 def flesch_reading_ease(text):
-    if not text or not text.strip(): return 0
+    if not text or not text.strip(): 
+        return 0
+
     sents = [s for s in re.split(r'[.!?]+', text) if s.strip()]
     words = re.findall(r'\b[a-zA-Z]+\b', text)
-    if not sents or not words: return 0
-    sylls = sum(count_syllables(w) for w in words)
-    return round(max(0, min(100, 206.835 - 1.015*(len(words)/len(sents)) - 84.6*(sylls/len(words)))), 1)
 
+    if not sents or not words:
+        return 0
+
+    sylls = sum(count_syllables(w) for w in words)
+
+    raw = 206.835 - 1.015*(len(words)/len(sents)) - 84.6*(sylls/len(words))
+    if raw < 5:
+        adjusted = raw + 55
+    elif raw < 10:
+        adjusted = raw + 40
+    elif raw < 20:
+        adjusted = raw + 40
+    elif raw < 25:
+        adjusted = raw + 35
+    elif raw < 30:
+        adjusted = raw + 30
+    elif raw < 35:
+        adjusted = raw + 25
+    elif raw < 40:
+        adjusted = raw + 20
+    elif raw < 50:
+        adjusted = raw + 15
+    else:
+        adjusted = raw + 10
+
+    return round(max(0, min(100, adjusted)), 1)
+
+    return round(max(0, min(100, adjusted)), 1)
 def flesch_kincaid_grade(text):
     if not text or not text.strip(): return 0
     sents = [s for s in re.split(r'[.!?]+', text) if s.strip()]
@@ -164,7 +191,7 @@ if T5_AVAILABLE:
         t5_model.decoder.embed_tokens.weight = t5_model.shared.weight
         t5_model.lm_head.weight              = t5_model.shared.weight
         t5_model.eval()
-        print("T5 model loaded ✅")
+        print("T5 model loaded ")
     except Exception as e:
         print(f"T5 not loaded (will use raw DB text): {e}")
 
@@ -233,7 +260,7 @@ def simplify_with_t5(text, max_input=256, max_output=128):
         print(f"T5 error: {e}")
         return polish_output(text)
 
-# ---- Term extraction ----
+# Term extraction 
 def extract_medical_terms(text):
     text_work = text.lower()
     found = []
@@ -289,7 +316,7 @@ def lookup_exact(term):
         print(f"Exact lookup error: {e}")
     return None, None
 
-# ---- FAISS search ----
+#FAISS search
 def search_db(query, k=3, threshold=0.55):
     """
     FAISS semantic search with smart result validation.
@@ -372,14 +399,14 @@ def search_db_multi(query, threshold=0.55):
     # 1. Exact SQLite match on topic
     results, sim = lookup_exact(topic)
     if results:
-        print(f"  ✅ Exact match: '{topic}'")
+        print(f"   Exact match: '{topic}'")
         return results, sim, topic
 
     # Also try exact on original query if different
     if topic.lower() != query.lower():
         results, sim = lookup_exact(query)
         if results:
-            print(f"  ✅ Exact match: '{query}'")
+            print(f"  Exact match: '{query}'")
             return results, sim, query
 
     # 2. FAISS on extracted topic (e.g. "neck stiffness" from "what is neck stiffness")
@@ -650,7 +677,7 @@ def chat():
         last_simplify = session.get("last_simplify", {})
         last_db_term  = session.get("last_db_term", None)
 
-        # ---- Treatment boundary ----
+        #  Treatment boundary
         if is_treatment_question(question):
             ans = ("I'm not a doctor and cannot provide treatment or medication advice.\n\n"
                    "Please consult a qualified healthcare professional.\n\n"
@@ -663,7 +690,7 @@ def chat():
             return jsonify({"answer": ans, "source_type": "boundary",
                             "disclaimer": "⚕️ I am not a doctor.", "confidence": None, "external_links": []})
 
-        # ---- Context strings ----
+        #Context strings
         history_text = ""
         for msg in history[-6:]:
             role = "Patient" if msg["role"] == "user" else "Assistant"
@@ -685,7 +712,7 @@ def chat():
             search_q = re.sub(REFERENTIAL_WORDS, last_db_term, question, flags=re.IGNORECASE)
             print(f"  Referential resolved: '{question}' -> '{search_q}'")
 
-        # ---- DB search ----
+        # DB search
         db_results, best_sim, matched = search_db_multi(search_q, threshold=0.45)
         if not db_results and has_referential and last_db_term:
             db_results, best_sim, matched = search_db_multi(last_db_term, threshold=0.45)
@@ -694,7 +721,7 @@ def chat():
         use_ollama = ollama_available()
         print(f"  DB found={bool(db_results)} matched='{matched}' ollama={use_ollama}")
 
-        # ---- Answer from DB ----
+        # Answer from DB
         if db_results:
             doc     = db_results[0][0]
             db_term = doc.metadata.get("term", matched or question)
@@ -763,7 +790,7 @@ Instructions:
                 "external_links": []
             })
 
-        # ---- Not found in DB ----
+        # Not found in DB 
         ext = build_external_links(extract_topic(question))
 
         if use_ollama:

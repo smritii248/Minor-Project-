@@ -1,0 +1,171 @@
+2026-03-24 12:59:02,594 | INFO | ============================================================
+2026-03-24 12:59:02,595 | INFO | Starting merge of new data sources
+2026-03-24 12:59:02,595 | INFO | ============================================================
+2026-03-24 12:59:02,595 | WARNING | File not found, skipping: datasets/created_simplification_data.json
+2026-03-24 12:59:02,595 | INFO | [2/5] Reading data.json
+2026-03-24 12:59:02,607 | INFO |   -> 749 records
+2026-03-24 12:59:02,608 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 12:59:02,608 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 12:59:02,608 | INFO | [5/5] Reading simplification.json
+2026-03-24 12:59:02,644 | INFO |   -> 4,459 records
+2026-03-24 12:59:02,645 | INFO |   Removed 8 in-batch duplicates
+2026-03-24 12:59:02,645 | INFO | Total processed after dedup: 5,200
+2026-03-24 12:59:02,646 | INFO | Loading records into database...
+2026-03-24 13:02:25,708 | INFO | ============================================================
+2026-03-24 13:02:25,708 | INFO | Starting merge of new data sources
+2026-03-24 13:02:25,708 | INFO | ============================================================
+2026-03-24 13:02:25,708 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:08:42,810 | INFO | ============================================================
+2026-03-24 13:08:42,810 | INFO | Starting merge of new data sources
+2026-03-24 13:08:42,810 | INFO | ============================================================
+2026-03-24 13:08:42,810 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:08:42,826 | INFO |   -> 6,967 records
+2026-03-24 13:08:42,827 | INFO | [2/5] Reading data.json
+2026-03-24 13:08:42,838 | INFO |   -> 749 records
+2026-03-24 13:08:42,838 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:08:42,838 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:08:42,838 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:08:42,875 | INFO |   -> 4,459 records
+2026-03-24 13:08:42,877 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:08:42,877 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:08:42,878 | INFO | Loading records into database...
+2026-03-24 13:09:43,164 | INFO | ============================================================
+2026-03-24 13:09:43,164 | INFO | Starting merge of new data sources
+2026-03-24 13:09:43,164 | INFO | ============================================================
+2026-03-24 13:09:43,164 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:09:43,181 | INFO |   -> 6,967 records
+2026-03-24 13:09:43,181 | INFO | [2/5] Reading data.json
+2026-03-24 13:09:43,192 | INFO |   -> 749 records
+2026-03-24 13:09:43,193 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:09:43,193 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:09:43,193 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:09:43,228 | INFO |   -> 4,459 records
+2026-03-24 13:09:43,230 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:09:43,231 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:09:43,231 | INFO | Loading records into database...
+2026-03-24 13:18:09,077 | INFO | ============================================================
+2026-03-24 13:18:09,077 | INFO | Starting merge of new data sources
+2026-03-24 13:18:09,077 | INFO | ============================================================
+2026-03-24 13:18:09,077 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:18:09,095 | INFO |   -> 6,967 records
+2026-03-24 13:18:09,095 | INFO | [2/5] Reading data.json
+2026-03-24 13:18:09,107 | INFO |   -> 749 records
+2026-03-24 13:18:09,108 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:18:09,108 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:18:09,108 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:18:09,149 | INFO |   -> 4,459 records
+2026-03-24 13:18:09,151 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:18:09,152 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:18:09,156 | INFO | Loading records into database...
+2026-03-24 13:20:11,114 | INFO | ============================================================
+2026-03-24 13:20:11,114 | INFO | Starting merge of new data sources
+2026-03-24 13:20:11,114 | INFO | ============================================================
+2026-03-24 13:20:11,114 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:20:11,131 | INFO |   -> 6,967 records
+2026-03-24 13:20:11,132 | INFO | [2/5] Reading data.json
+2026-03-24 13:20:11,144 | INFO |   -> 749 records
+2026-03-24 13:20:11,145 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:20:11,145 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:20:11,145 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:20:11,182 | INFO |   -> 4,459 records
+2026-03-24 13:20:11,184 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:20:11,185 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:20:11,188 | INFO | Loading records into database...
+2026-03-24 13:21:26,582 | INFO | ============================================================
+2026-03-24 13:21:26,582 | INFO | Starting merge of new data sources
+2026-03-24 13:21:26,582 | INFO | ============================================================
+2026-03-24 13:21:26,582 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:21:26,599 | INFO |   -> 6,967 records
+2026-03-24 13:21:26,599 | INFO | [2/5] Reading data.json
+2026-03-24 13:21:26,610 | INFO |   -> 749 records
+2026-03-24 13:21:26,610 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:21:26,610 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:21:26,611 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:21:26,645 | INFO |   -> 4,459 records
+2026-03-24 13:21:26,647 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:21:26,647 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:21:26,648 | INFO | Loading records into database...
+2026-03-24 13:21:41,058 | INFO | ============================================================
+2026-03-24 13:21:41,058 | INFO | Starting merge of new data sources
+2026-03-24 13:21:41,058 | INFO | ============================================================
+2026-03-24 13:21:41,058 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:21:41,075 | INFO |   -> 6,967 records
+2026-03-24 13:21:41,075 | INFO | [2/5] Reading data.json
+2026-03-24 13:21:41,086 | INFO |   -> 749 records
+2026-03-24 13:21:41,087 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:21:41,087 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:21:41,087 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:21:41,120 | INFO |   -> 4,459 records
+2026-03-24 13:21:41,122 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:21:41,123 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:21:41,123 | INFO | Loading records into database...
+2026-03-24 13:21:41,171 | INFO |   Inserted : 9,179
+2026-03-24 13:21:41,171 | INFO |   Skipped  : 0
+2026-03-24 13:21:41,171 | INFO |   DB Total : 9,179
+2026-03-24 13:21:41,391 | INFO | FTS5 index rebuilt
+2026-03-24 13:21:41,397 | INFO | ============================================================
+2026-03-24 13:21:41,397 | INFO | Merge complete!
+2026-03-24 13:21:41,397 | INFO | ============================================================
+2026-03-24 13:29:19,962 | INFO | ============================================================
+2026-03-24 13:29:19,962 | INFO | Starting merge of new data sources
+2026-03-24 13:29:19,963 | INFO | ============================================================
+2026-03-24 13:29:19,963 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:29:19,979 | INFO |   -> 6,967 records
+2026-03-24 13:29:19,980 | INFO | [2/5] Reading data.json
+2026-03-24 13:29:19,992 | INFO |   -> 749 records
+2026-03-24 13:29:19,992 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:29:19,992 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:29:19,992 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:29:20,030 | INFO |   -> 4,459 records
+2026-03-24 13:29:20,032 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:29:20,032 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:29:20,034 | INFO | Loading records into database...
+2026-03-24 13:29:20,093 | INFO |   Inserted : 9,179
+2026-03-24 13:29:20,093 | INFO |   Skipped  : 0
+2026-03-24 13:29:20,093 | INFO |   DB Total : 9,179
+2026-03-24 13:29:20,316 | INFO | FTS5 index rebuilt
+2026-03-24 13:29:20,322 | INFO | ============================================================
+2026-03-24 13:29:20,322 | INFO | Merge complete!
+2026-03-24 13:29:20,322 | INFO | ============================================================
+2026-03-24 13:44:33,329 | INFO | ============================================================
+2026-03-24 13:44:33,329 | INFO | Starting merge of new data sources
+2026-03-24 13:44:33,329 | INFO | ============================================================
+2026-03-24 13:44:33,329 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:44:33,346 | INFO |   -> 6,967 records
+2026-03-24 13:44:33,346 | INFO | [2/5] Reading data.json
+2026-03-24 13:44:33,359 | INFO |   -> 749 records
+2026-03-24 13:44:33,359 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:44:33,359 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:44:33,359 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:44:33,400 | INFO |   -> 4,459 records
+2026-03-24 13:44:33,402 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:44:33,403 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:44:33,405 | INFO | Loading records into database...
+2026-03-24 13:44:33,471 | INFO |   Inserted : 9,179
+2026-03-24 13:44:33,471 | INFO |   Skipped  : 0
+2026-03-24 13:44:33,472 | INFO |   DB Total : 9,179
+2026-03-24 13:44:33,699 | INFO | FTS5 index rebuilt
+2026-03-24 13:44:33,706 | INFO | ============================================================
+2026-03-24 13:44:33,706 | INFO | Merge complete!
+2026-03-24 13:44:33,706 | INFO | ============================================================
+2026-03-24 13:48:29,815 | INFO | ============================================================
+2026-03-24 13:48:29,815 | INFO | Starting merge of new data sources
+2026-03-24 13:48:29,815 | INFO | ============================================================
+2026-03-24 13:48:29,815 | INFO | [1/5] Reading created_simplification_data.json
+2026-03-24 13:48:29,832 | INFO |   -> 6,967 records
+2026-03-24 13:48:29,832 | INFO | [2/5] Reading data.json
+2026-03-24 13:48:29,845 | INFO |   -> 749 records
+2026-03-24 13:48:29,845 | WARNING | File not found, skipping: datasets/dev-set-_alpha_.csv
+2026-03-24 13:48:29,845 | WARNING | File not found, skipping: datasets/expert_fully_aligned_txt.gz
+2026-03-24 13:48:29,845 | INFO | [5/5] Reading simplification.json
+2026-03-24 13:48:29,886 | INFO |   -> 4,459 records
+2026-03-24 13:48:29,888 | INFO |   Removed 2,996 in-batch duplicates
+2026-03-24 13:48:29,889 | INFO | Total processed after dedup: 9,179
+2026-03-24 13:48:29,892 | INFO | Loading records into database...
+2026-03-24 13:48:29,954 | INFO |   Inserted : 9,179
+2026-03-24 13:48:29,954 | INFO |   Skipped  : 0
+2026-03-24 13:48:29,954 | INFO |   DB Total : 9,179
+2026-03-24 13:48:30,181 | INFO | FTS5 index rebuilt
+2026-03-24 13:48:30,187 | INFO | ============================================================
+2026-03-24 13:48:30,187 | INFO | Merge complete!
+2026-03-24 13:48:30,187 | INFO | ============================================================

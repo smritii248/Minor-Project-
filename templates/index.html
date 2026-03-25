@@ -314,16 +314,16 @@ document.getElementById('simpBtn').addEventListener('click', async () => {
       const tip = document.getElementById('rTip');
       if (sc >= 70) {
         tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-green-50 text-green-700';
-        tip.textContent = '✅ Our explanation is easy to read — suitable for patients without medical background.';
+        tip.textContent = 'Our explanation is easy to read suitable for patients without medical background.';
       } else if (sc >= 50) {
         tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-blue-50 text-blue-700';
-        tip.textContent = '📖 Moderately readable. Use the "Ask further" button or chatbot to get a simpler version.';
+        tip.textContent = 'Use the "Ask further" button or chatbot for further simplification.';
       } else if (sc >= 30) {
         tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-yellow-50 text-yellow-700';
-        tip.textContent = '⚠️ This term uses complex medical language. Ask the chatbot: "Can you explain this simply?"';
+        tip.textContent = ' This term uses complex medical language. Ask the chatbot: "Can you explain this simply?"';
       } else {
         tip.className = 'text-xs mt-3 px-3 py-2 rounded-lg bg-red-50 text-red-700';
-        tip.textContent = '🔴 Highly technical content. Ask the chatbot: "Explain this in simple words."';
+        tip.textContent = 'Highly technical content. Ask the chatbot: "Explain this in simple words."';
       }
     } else {
       document.getElementById('rNoData').classList.remove('hidden');
