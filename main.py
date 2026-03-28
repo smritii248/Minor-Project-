@@ -662,6 +662,33 @@ def simplify():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
+def build_external_links(term):
+    q = requests.utils.quote(term)
+    return [
+        {
+            "label": "NIH MedlinePlus",
+            "url":   f"https://medlineplus.gov/search/?query={q}",
+            "desc":  "US National Library of Medicine"
+        },
+        {
+            "label": "Mayo Clinic",
+            "url":   f"https://www.mayoclinic.org/search/search-results?q={q}&searchtype=general",
+            "desc":  "Trusted medical information"
+        },
+        {
+            "label": "WHO Health Topics",
+            "url":   f"https://www.who.int/health-topics",
+            "desc":  "World Health Organization"
+        },
+        {
+            "label": "WebMD",
+            "url":   f"https://www.webmd.com/search/search_results/default.aspx?query={q}",
+            "desc":  "Medical reference"
+        },
+    ]
+
+
 @app.route('/chat', methods=['POST'])
 def chat():
     print("\n=== /chat ===")
@@ -846,6 +873,7 @@ Note: This topic was NOT found in our verified database. Answer from general med
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/chat/clear', methods=['POST'])
 def chat_clear():
